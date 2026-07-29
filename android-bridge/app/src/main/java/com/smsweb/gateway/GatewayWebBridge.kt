@@ -1,6 +1,5 @@
 package com.smsweb.gateway
 
-import android.content.Context
 import android.telephony.SmsManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
@@ -8,10 +7,10 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 class GatewayWebBridge(
-    context: Context,
+    private val activity: MainActivity,
     private val webView: WebView
 ) {
-    private val appContext = context.applicationContext
+    private val appContext = activity.applicationContext
 
     @JavascriptInterface
     fun getGatewayStatus(): String = "ready"
@@ -49,6 +48,12 @@ class GatewayWebBridge(
     @JavascriptInterface
     fun acknowledgeResponse(text: String) {
         GatewayDatabase(appContext).markWebDeliveredByText(text)
+    }
+
+    @JavascriptInterface
+    fun requestCurrentLocation(): String {
+        activity.requestCurrentLocationForWeb()
+        return "queued"
     }
 
     @Suppress("DEPRECATION")

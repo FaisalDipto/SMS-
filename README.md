@@ -772,10 +772,18 @@ This MVP is enough to demonstrate the core concept before adding a real Android 
 SMSWeb can display shelter and hazard coordinates on a map even when internet access is unavailable. The map basemap and crisis data use separate storage paths:
 
 ```text
-Offline map package: region.pmtiles + map-style.json
+Offline map package: web/data/dhaka.pmtiles
 SMS updates:         shelter coordinates stored in IndexedDB
 Rendering:           MapLibre GL JS running locally
 ```
+
+The bundled map is a 22.3 MB Protomaps vector extract containing 830 tiles from
+zoom 0 through zoom 15. Its bounds are `90.30,23.65,90.50,23.95`, covering
+greater Dhaka rather than only the Mirpur routing test area. The extract includes
+roads, road names, buildings, land use, water, places, and points of interest
+derived from OpenStreetMap. MapLibre, the PMTiles reader, style generator, fonts,
+and sprites are all packaged under `web/vendor/`; displaying the map does not
+depend on a CDN or live tile server.
 
 Example SMS response:
 
@@ -787,11 +795,22 @@ The parser validates the latitude, longitude, status, timestamp, and expiry. A v
 
 The dashboard can request the phone's location and calculate great-circle (straight-line) distances to coordinate-bearing shelters. These distances are not road travel distances and must not be presented as an emergency route.
 
-The routing engine uses a separate local graph containing road nodes and directed edges. Each edge has a distance and can be marked blocked by an emergency report. The current demo bundles one small Mirpur graph generated from licensed OpenStreetMap data; it is deliberately limited to that tile until wider coverage is verified.
+The routing engine uses a separate local graph containing road nodes and directed edges. Each edge has a distance and can be marked blocked by an emergency report. The current demo bundles an expanded five-tile Mirpur graph generated from licensed OpenStreetMap data; it is still deliberately limited to that verified coverage area.
 
-The current route preview bundles one real OpenStreetMap road tile covering a small Mirpur area. It can calculate a road route only when both the phone location and the selected shelter fall inside that tile. The UI must report when a location is outside coverage. The bundled road data includes OpenStreetMap attribution.
+The current route preview bundles five adjacent OpenStreetMap road tiles covering a larger Mirpur area, including connector, residential, living-street, service, and other mapped road classes. It can calculate a road route only when both the phone location and the selected shelter fall inside that coverage. The UI must report when a location is outside coverage. The bundled road data includes OpenStreetMap attribution.
 
-Recommended implementation:
+Route edges retain available OpenStreetMap road names, and the dashboard shows the phone's coordinate, destination shelter, named roads used by the selected route, and labels those named segments on the focused map. Unnamed road segments are reported honestly instead of being assigned invented street names.
+
+The offline vector map supports touch zoom, panning, bearing rotation, compass
+reset, a metric scale, shelter markers, a current-location marker, and the blue
+calculated route. These controls change the view only; routable coverage still
+depends on the verified road graph bundled for the region. Android loads the
+bundled web app through `WebViewAssetLoader` so map assets use a secure local
+HTTPS-style origin instead of the restricted `file://` origin. On Android,
+location is requested through the native `LocationManager` bridge and passed to
+the web map; browser geolocation remains the desktop/PWA fallback.
+
+Current implementation:
 
 - **MapLibre GL JS** for interactive vector-map rendering.
 - **PMTiles** for packaging regional vector tiles into one offline archive.

@@ -13,7 +13,9 @@ if (!inputPath || !outputPath) {
 
 const xml = fs.readFileSync(inputPath, 'utf8');
 const allowedHighways = new Set([
-  'motorway', 'trunk', 'primary', 'secondary', 'tertiary', 'unclassified', 'residential'
+  'motorway', 'motorway_link', 'trunk', 'trunk_link', 'primary', 'primary_link',
+  'secondary', 'secondary_link', 'tertiary', 'tertiary_link', 'unclassified',
+  'residential', 'living_street', 'service', 'road'
 ]);
 
 function attributes(text) {
@@ -40,11 +42,12 @@ const graphEdges = {};
 let wayCount = 0;
 let edgeCount = 0;
 
-function addEdge(from, to, wayId, segment, direction) {
+function addEdge(from, to, wayId, segment, direction, roadName) {
   if (!graphEdges[from]) graphEdges[from] = [];
   graphEdges[from].push({
     id: `${wayId}:${segment}:${direction}`,
     roadId: wayId,
+    roadName: roadName || '',
     to,
     distanceMeters: geo.distanceKm(graphNodes[from], graphNodes[to]) * 1000
   });
@@ -70,15 +73,16 @@ for (const match of xml.matchAll(/<way\b([^>]*)>([\s\S]*?)<\/way>/g)) {
   for (const ref of refs) graphNodes[ref] = allNodes.get(ref);
   const oneway = tags.oneway === 'yes' || tags.oneway === 'true' || tags.oneway === '1' || tags.junction === 'roundabout';
   const reverseOneway = tags.oneway === '-1';
+  const roadName = tags.name || tags['name:en'] || '';
 
   for (let index = 0; index < refs.length - 1; index += 1) {
     const from = refs[index];
     const to = refs[index + 1];
     if (reverseOneway) {
-      addEdge(to, from, wayAttributes.id, index, 'reverse');
+      addEdge(to, from, wayAttributes.id, index, 'reverse', roadName);
     } else {
-      addEdge(from, to, wayAttributes.id, index, 'forward');
-      if (!oneway) addEdge(to, from, wayAttributes.id, index, 'reverse');
+      addEdge(from, to, wayAttributes.id, index, 'forward', roadName);
+      if (!oneway) addEdge(to, from, wayAttributes.id, index, 'reverse', roadName);
     }
   }
   wayCount += 1;

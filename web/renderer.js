@@ -270,7 +270,10 @@
     const unknownLocations = shelters.filter((shelter) =>
       shelter.latitude === undefined && !SHELTER_COORDINATES[shelter.location]
     );
-    const body = `<div class="map-placeholder map-data-view" role="img" aria-label="Offline Dhaka shelter map">
+    const body = `<div class="map-placeholder map-data-view" aria-label="Offline greater Dhaka shelter map">
+      <div id="offline-vector-map" class="offline-vector-map" role="application" aria-label="Interactive offline greater Dhaka map"></div>
+      <div id="map-legacy-layer" class="map-legacy-layer">
+      <div id="map-viewport" class="map-viewport">
         <svg class="map-basemap" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
           <rect width="100" height="100" class="map-land"></rect>
           <path class="map-water" d="M4 0 C18 18 13 34 25 48 S20 76 7 100 L0 100 L0 0 Z"></path>
@@ -279,6 +282,7 @@
           <path class="map-road" d="M10 25 C29 31 48 29 70 20 S88 10 100 9"></path>
           <path class="map-road" d="M35 100 C43 82 52 70 68 58 S83 36 92 15"></path>
           <path class="map-road" d="M18 76 C37 72 55 76 78 91"></path>
+          <path id="map-offline-roads" class="map-offline-roads" d=""></path>
           <text x="69" y="11" class="map-place-label">UTTARA</text>
           <text x="27" y="54" class="map-place-label">MIRPUR</text>
           <text x="55" y="83" class="map-place-label">DU</text>
@@ -286,10 +290,21 @@
         </svg>
         <div class="map-grid" aria-hidden="true"></div>
         <svg class="map-route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <g id="map-road-labels" class="map-road-labels"></g>
           <path id="map-route-line" class="map-route-line" d=""></path>
+          <circle id="map-user-location" class="map-user-location" cx="0" cy="0" r="1.2"></circle>
         </svg>
-        <div class="map-label">DHK shelter markers</div>
+        <div class="map-label">Loading detailed greater Dhaka map...</div>
         ${markers || '<p>No shelters with bundled coordinates are available.</p>'}
+      </div>
+      <div class="map-controls" aria-label="Map controls">
+        <button id="map-zoom-in" type="button" aria-label="Zoom in">+</button>
+        <button id="map-zoom-out" type="button" aria-label="Zoom out">−</button>
+        <button id="map-rotate-left" type="button" aria-label="Rotate map left">↶</button>
+        <button id="map-rotate-right" type="button" aria-label="Rotate map right">↷</button>
+        <button id="map-reset-view" type="button">Reset view</button>
+      </div>
+      </div>
       </div>
       <div class="map-summary">
         <span>${markerRecords.length > 0 ? `${markerRecords.length} shelter markers` : 'No shelter markers'}</span>
@@ -301,10 +316,12 @@
         <ul id="map-distance-list" class="map-distance-list" aria-live="polite"></ul>
         <button id="map-route" type="button">Find route to nearest open shelter</button>
         <p id="map-route-status" class="map-note">Mirpur road coverage is bundled for route preview.</p>
+        <p id="map-route-location" class="map-note"></p>
+        <ul id="map-route-roads" class="map-route-roads" aria-live="polite"></ul>
         <p class="map-attribution">Road data: &copy; OpenStreetMap contributors</p>
       </div>
       <p class="map-selection" id="map-selection">Tap a marker to view shelter details.</p>
-      <p class="map-note">Illustrative backdrop only. Emergency navigation requires a verified offline road dataset and routing graph.</p>
+      <p id="map-data-note" class="map-note">Detailed basemap data is bundled for offline use. Route calculation currently uses the separate verified Mirpur road graph.</p>
       ${unknownLocations.length > 0
         ? `<p class="map-note">No bundled coordinate is available for ${escapeHtml(unknownLocations.map((shelter) => shelter.location).join(', '))}.</p>`
         : ''}`;

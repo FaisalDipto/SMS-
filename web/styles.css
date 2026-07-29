@@ -396,6 +396,32 @@ h2 {
   text-align: center;
 }
 
+.offline-vector-map {
+  width: 100%;
+  height: clamp(34rem, 72vh, 54rem);
+  background: #e7f3ef;
+  text-align: left;
+}
+
+.offline-vector-map .maplibregl-canvas {
+  outline: none;
+}
+
+.offline-vector-map .maplibregl-ctrl-attrib {
+  font-size: 0.62rem;
+}
+
+.map-legacy-layer {
+  position: absolute;
+  z-index: 6;
+  inset: 0;
+  background: #e7f3ef;
+}
+
+.map-legacy-layer.is-hidden {
+  display: none;
+}
+
 .map-grid {
   position: absolute;
   inset: 0;
@@ -449,6 +475,26 @@ h2 {
   stroke-width: 2.2;
 }
 
+.map-offline-roads {
+  fill: none;
+  stroke: #6f9990;
+  stroke-width: 0.42;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.86;
+  vector-effect: non-scaling-stroke;
+}
+
+.has-offline-road-graph .map-road {
+  display: none;
+}
+
+.is-route-focused .map-water,
+.is-route-focused .map-place-label,
+.is-route-focused .map-river-label {
+  display: none;
+}
+
 .map-route-line {
   display: none;
   fill: none;
@@ -460,6 +506,28 @@ h2 {
 }
 
 .map-route-line.is-visible {
+  display: block;
+}
+
+.map-road-label {
+  fill: #17312f;
+  font-size: 2.2px;
+  font-weight: 800;
+  paint-order: stroke;
+  stroke: #e7f3ef;
+  stroke-width: 0.7px;
+  stroke-linejoin: round;
+}
+
+.map-user-location {
+  display: none;
+  fill: #0759d7;
+  stroke: #ffffff;
+  stroke-width: 0.7;
+  vector-effect: non-scaling-stroke;
+}
+
+.map-user-location.is-visible {
   display: block;
 }
 
@@ -494,6 +562,41 @@ h2 {
   display: block;
   padding: 0;
   text-align: left;
+}
+
+.map-viewport {
+  position: absolute;
+  inset: 0;
+  transform-origin: 50% 50%;
+  touch-action: none;
+}
+
+.map-controls {
+  position: absolute;
+  z-index: 8;
+  top: 0.6rem;
+  right: 0.6rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.3rem;
+  max-width: 9rem;
+}
+
+.map-controls button {
+  min-width: 2rem;
+  min-height: 2rem;
+  border: 1px solid #8db4ac;
+  border-radius: 0.45rem;
+  padding: 0.2rem 0.45rem;
+  color: #17312f;
+  background: rgba(255, 255, 255, 0.92);
+  font: inherit;
+  font-weight: 800;
+}
+
+.map-controls button:active {
+  background: #d8eee8;
 }
 
 .map-label {
@@ -582,6 +685,13 @@ h2 {
   margin: 0.75rem 0 0;
   color: #55716d;
   font-size: 0.7rem;
+}
+
+.map-route-roads {
+  margin: 0.35rem 0 0;
+  padding-left: 1.2rem;
+  color: #17312f;
+  font-size: 0.82rem;
 }
 
 .map-distance-list {

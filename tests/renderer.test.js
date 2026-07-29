@@ -88,8 +88,18 @@ test('renders bundled shelter coordinates on the offline map', () => {
     receivedAt: 1_700_000_000_000
   }, 1_700_000_000_000);
 
-  assert.match(html, /DHK shelter markers/);
+  assert.match(html, /offline-vector-map/);
+  assert.match(html, /Loading detailed greater Dhaka map/);
   assert.match(html, /map-basemap/);
+  assert.match(html, /map-viewport/);
+  assert.match(html, /map-zoom-in/);
+  assert.match(html, /map-rotate-right/);
+  assert.match(html, /map-reset-view/);
+  assert.match(html, /map-offline-roads/);
+  assert.match(html, /map-user-location/);
+  assert.match(html, /map-road-labels/);
+  assert.match(html, /map-route-location/);
+  assert.match(html, /map-route-roads/);
   assert.match(html, /BURIGANGA/);
   assert.match(html, /2 shelter markers/);
   assert.match(html, /map-marker-open/);
@@ -100,7 +110,7 @@ test('renders bundled shelter coordinates on the offline map', () => {
   assert.match(html, /Find route to nearest open shelter/);
   assert.match(html, /map-route-overlay/);
   assert.match(html, /OpenStreetMap contributors/);
-  assert.match(html, /Illustrative backdrop only/);
+  assert.match(html, /Detailed basemap data is bundled for offline use/);
 });
 
 test('renders recent SMS activity safely', () => {

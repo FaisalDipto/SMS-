@@ -11,8 +11,8 @@ const graph = {
     D: { latitude: 23.8100, longitude: 90.3600 }
   },
   edges: {
-    A: [{ id: 'AB', to: 'B', distanceMeters: 1000 }, { id: 'AD', to: 'D', distanceMeters: 1100 }],
-    B: [{ id: 'BC', to: 'C', distanceMeters: 1000 }],
+    A: [{ id: 'AB', to: 'B', distanceMeters: 1000, roadName: 'Mirpur Road' }, { id: 'AD', to: 'D', distanceMeters: 1100, roadName: 'Alternative Road' }],
+    B: [{ id: 'BC', to: 'C', distanceMeters: 1000, roadName: 'Kazipara Road' }],
     C: [{ id: 'CD', to: 'D', distanceMeters: 1000 }],
     D: [{ id: 'DC', to: 'C', distanceMeters: 1000 }]
   }
@@ -26,6 +26,7 @@ test('finds the shortest available path in an offline graph', () => {
   );
 
   assert.deepEqual(route.nodeIds, ['A', 'B', 'C']);
+  assert.deepEqual(route.roadNames, ['Mirpur Road', 'Kazipara Road']);
   assert.equal(route.coordinates.length, 5);
   assert.equal(route.distanceMeters,
     2000 + route.originSnap.distanceMeters + route.destinationSnap.distanceMeters);

@@ -129,7 +129,7 @@
         const candidate = current.priority + edgeDistance;
         if (candidate >= (distances.get(edge.to) ?? Number.POSITIVE_INFINITY)) continue;
         distances.set(edge.to, candidate);
-        previous.set(edge.to, current.nodeId);
+        previous.set(edge.to, { nodeId: current.nodeId, edge });
         queue.push({ nodeId: edge.to, priority: candidate });
       }
     }
@@ -139,8 +139,13 @@
     }
 
     const nodeIds = [];
-    for (let nodeId = target.nodeId; nodeId; nodeId = previous.get(nodeId)) {
+    const pathEdges = [];
+    for (let nodeId = target.nodeId; nodeId; ) {
       nodeIds.unshift(nodeId);
+      const step = previous.get(nodeId);
+      if (!step) break;
+      pathEdges.unshift({ ...step.edge, from: step.nodeId });
+      nodeId = step.nodeId;
     }
 
     return {
@@ -151,6 +156,8 @@
         ...nodeIds.map((nodeId) => nodeCoordinate(graph, nodeId)),
         { latitude: destination.latitude, longitude: destination.longitude }
       ],
+      edges: pathEdges,
+      roadNames: [...new Set(pathEdges.map((edge) => edge.roadName).filter(Boolean))],
       originSnap: start,
       destinationSnap: target
     };
