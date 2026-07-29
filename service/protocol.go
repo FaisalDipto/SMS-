@@ -19,6 +19,11 @@ var allowedCommands = map[string]bool{
 	"ROAD":    true,
 	"REPORT":  true,
 	"HELP":    true,
+	"ALERT":   true,
+}
+
+var alertPriorities = map[string]bool{
+	"LOW": true, "MEDIUM": true, "HIGH": true, "CRITICAL": true,
 }
 
 type Request struct {
@@ -138,6 +143,38 @@ func SerializeError(requestID, code, message string) string {
 		escapeField(code),
 		escapeField(message),
 	}, "|")
+}
+
+func SerializeAlert(alertID, priority string, expires int64, region, message string) (string, error) {
+	if !identifierPattern.MatchString(alertID) {
+		return "", fmt.Errorf("invalid alert ID")
+	}
+	if !alertPriorities[priority] {
+		return "", fmt.Errorf("invalid alert priority")
+	}
+	if expires <= 0 {
+		return "", fmt.Errorf("alert expiry must be positive")
+	}
+	if err := validateRegion(region); err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(message) == "" {
+		return "", fmt.Errorf("alert message cannot be empty")
+	}
+
+	fields := []string{
+		"ALT",
+		protocolVersion,
+		alertID,
+		priority,
+		strconv.FormatInt(expires, 10),
+		region,
+		message,
+	}
+	for index := 1; index < len(fields); index++ {
+		fields[index] = escapeField(fields[index])
+	}
+	return strings.Join(fields, "|"), nil
 }
 
 func parseShelterRegion(arguments string) (string, error) {

@@ -239,6 +239,7 @@ Available commands for the first version:
 | `ROAD` | Get road warnings | `REQ|1|A17K|ROAD|DHK` |
 | `REPORT` | Submit a report | `REQ|1|A17K|REPORT|ROAD,BLOCKED,MIRPUR` |
 | `HELP` | Show command help | `REQ|1|A17K|HELP|-` |
+| `ALERT` | Retrieve active emergency alerts | `REQ|1|A17K|ALERT|DHK` |
 
 ### 5.2 Response format
 

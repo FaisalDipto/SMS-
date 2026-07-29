@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -70,6 +71,26 @@ func TestIncomingShelterRequest(t *testing.T) {
 	}
 	if count != 2 {
 		t.Fatalf("expected incoming and outgoing messages, got %d", count)
+	}
+}
+
+func TestIncomingAlertRequest(t *testing.T) {
+	_, handler := newTestServer(t)
+	response := requestJSON(t, handler, http.MethodPost, "/sms/incoming", incomingSMS{
+		Sender: "+8801712345678",
+		Text:   "REQ|1|B33M|ALERT|DHK",
+	})
+
+	if response.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d %s", response.Code, response.Body.String())
+	}
+
+	var gateway gatewayResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &gateway); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(gateway.Text, "ALT|1|F22P|HIGH|") {
+		t.Fatalf("unexpected alert response: %s", gateway.Text)
 	}
 }
 

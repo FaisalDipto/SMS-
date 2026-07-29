@@ -36,6 +36,7 @@ test('loads and saves the native Pi URL', () => {
   const serviceNumber = element();
   const saveServiceNumberButton = element();
   const requestSheltersButton = element();
+  const requestAlertsButton = element();
   const requestStatus = element();
 
   instance.initialize({
@@ -47,6 +48,7 @@ test('loads and saves the native Pi URL', () => {
     serviceNumber,
     saveServiceNumberButton,
     requestSheltersButton,
+    requestAlertsButton,
     requestStatusElement: requestStatus
   });
 
@@ -71,6 +73,7 @@ test('updates the badge when the native health result arrives', () => {
     serviceNumber: element(),
     saveServiceNumberButton: element(),
     requestSheltersButton: element(),
+    requestAlertsButton: element(),
     requestStatusElement: element()
   });
   instance.receiveConnectionStatus(true);
@@ -113,4 +116,19 @@ test('serializes and sends a shelter request through the native bridge', () => {
     command: 'SHELTER',
     arguments: 'DHK'
   });
+});
+
+test('serializes and sends an alert request through the native bridge', () => {
+  let sentText;
+  const instance = gateway.createGateway({
+    sendSms: (_recipient, rawText) => {
+      sentText = rawText;
+      return 'queued';
+    }
+  }, protocol);
+
+  const result = instance.sendAlertRequest('+8801700000000', 'DHK');
+
+  assert.equal(sentText, result.rawText);
+  assert.equal(protocol.parseRequest(result.rawText).command, 'ALERT');
 });

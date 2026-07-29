@@ -27,6 +27,14 @@ type Shelter struct {
 	Status   string
 }
 
+type Alert struct {
+	AlertID  string
+	Priority string
+	Expires  int64
+	Region   string
+	Message  string
+}
+
 func OpenStore(path string) (*Store, error) {
 	database, err := sql.Open("sqlite", path)
 	if err != nil {
@@ -63,10 +71,22 @@ CREATE TABLE IF NOT EXISTS shelters (
     UNIQUE(region, location)
 );
 
+CREATE TABLE IF NOT EXISTS alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    alert_id TEXT NOT NULL UNIQUE,
+    priority TEXT NOT NULL,
+    expires_at INTEGER NOT NULL,
+    region TEXT NOT NULL,
+    message TEXT NOT NULL
+);
+
 INSERT OR IGNORE INTO shelters(region, location, spaces, status) VALUES
     ('DHK', 'MIRPUR', 120, 'OPEN'),
     ('DHK', 'UTTARA', 80, 'OPEN'),
     ('DHK', 'DU', 0, 'FULL');
+
+INSERT OR IGNORE INTO alerts(alert_id, priority, expires_at, region, message) VALUES
+    ('F22P', 'HIGH', CAST(strftime('%s', 'now') AS INTEGER) + 86400, 'DHK', 'Avoid the road near Mirpur bridge');
 `)
 	if err != nil {
 		return fmt.Errorf("initialize sqlite database: %w", err)
@@ -131,6 +151,32 @@ ORDER BY location
 		return nil, err
 	}
 	return shelters, nil
+}
+
+func (store *Store) FindActiveAlerts(region string, now time.Time) ([]Alert, error) {
+	rows, err := store.db.Query(`
+SELECT alert_id, priority, expires_at, region, message
+FROM alerts
+WHERE expires_at > ? AND (region = ? OR region = '-')
+ORDER BY expires_at ASC
+`, now.Unix(), region)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var alerts []Alert
+	for rows.Next() {
+		var alert Alert
+		if err := rows.Scan(&alert.AlertID, &alert.Priority, &alert.Expires, &alert.Region, &alert.Message); err != nil {
+			return nil, err
+		}
+		alerts = append(alerts, alert)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return alerts, nil
 }
 
 func (store *Store) MessageCount() (int, error) {

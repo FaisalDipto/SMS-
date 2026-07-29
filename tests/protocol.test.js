@@ -13,6 +13,17 @@ test('parses a shelter request from the README', () => {
   });
 });
 
+test('serializes an alert request', () => {
+  const rawText = protocol.serializeRequest({
+    requestId: 'F22P',
+    command: 'ALERT',
+    arguments: 'DHK'
+  });
+
+  assert.equal(rawText, 'REQ|1|F22P|ALERT|DHK');
+  assert.equal(protocol.parseRequest(rawText).command, 'ALERT');
+});
+
 test('serializes requests and escapes delimiter characters', () => {
   const request = {
     requestId: 'A17K',

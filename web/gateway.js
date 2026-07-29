@@ -39,6 +39,7 @@
       serviceNumber,
       saveServiceNumberButton,
       requestSheltersButton,
+      requestAlertsButton,
       requestStatusElement,
       onRequest
     }) {
@@ -49,7 +50,8 @@
       requestHandler = typeof onRequest === 'function' ? onRequest : null;
 
       if (!urlInput || !saveButton || !checkButton || !status || !badge ||
-        !serviceNumberInput || !saveServiceNumberButton || !requestSheltersButton || !requestStatus) {
+        !serviceNumberInput || !saveServiceNumberButton || !requestSheltersButton ||
+        !requestAlertsButton || !requestStatus) {
         return;
       }
 
@@ -59,6 +61,7 @@
         checkButton.disabled = true;
         saveServiceNumberButton.disabled = true;
         requestSheltersButton.disabled = true;
+        requestAlertsButton.disabled = true;
         return;
       }
 
@@ -101,13 +104,26 @@
           requestStatus.textContent = error.message;
         }
       });
+
+      requestAlertsButton.addEventListener('click', () => {
+        try {
+          const result = sendAlertRequest(serviceNumberInput.value, 'DHK');
+          requestStatus.textContent = `Alert request ${result.requestId} queued for SMS delivery.`;
+          requestAlertsButton.dataset.requestId = result.requestId;
+          if (requestHandler) {
+            void requestHandler(result);
+          }
+        } catch (error) {
+          requestStatus.textContent = error.message;
+        }
+      });
     }
 
     function createRequestId() {
       return `R${Date.now().toString(36).slice(-5).toUpperCase()}`;
     }
 
-    function sendShelterRequest(recipient, region) {
+    function sendRequest(recipient, command, region) {
       if (!bridge || typeof bridge.sendSms !== 'function') {
         throw new Error('SMS sending is available in the Android app.');
       }
@@ -118,7 +134,7 @@
       const requestId = createRequestId();
       const rawText = protocolApi.serializeRequest({
         requestId,
-        command: 'SHELTER',
+        command,
         arguments: region.trim().toUpperCase()
       });
       const sendStatus = bridge.sendSms(recipient, rawText);
@@ -130,6 +146,14 @@
       }
 
       return { requestId, rawText, status: sendStatus };
+    }
+
+    function sendShelterRequest(recipient, region) {
+      return sendRequest(recipient, 'SHELTER', region);
+    }
+
+    function sendAlertRequest(recipient, region) {
+      return sendRequest(recipient, 'ALERT', region);
     }
 
     function receiveConnectionStatus(connected) {
@@ -149,7 +173,8 @@
       receiveConnectionStatus,
       setIncomingHandler,
       receiveSms,
-      sendShelterRequest
+      sendShelterRequest,
+      sendAlertRequest
     };
   }
 

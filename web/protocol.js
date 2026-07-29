@@ -19,7 +19,8 @@
     'MED',
     'ROAD',
     'REPORT',
-    'HELP'
+    'HELP',
+    'ALERT'
   ]);
   const RESPONSE_PAGES = new Set([
     'HOME',

@@ -17,6 +17,7 @@
     serviceNumber: document.querySelector('#service-number'),
     saveServiceNumberButton: document.querySelector('#save-service-number'),
     requestSheltersButton: document.querySelector('#request-shelters'),
+    requestAlertsButton: document.querySelector('#request-alerts'),
     requestStatusElement: document.querySelector('#request-status'),
     onRequest: async (request) => {
       await window.SMSWeb.storage.saveMessage({

@@ -139,7 +139,21 @@ func (server *Server) createResponse(request Request) (string, error) {
 	case "HOME":
 		return SerializeResponse(request.RequestID, "HOME", "-", "SMSWeb crisis service")
 	case "HELP":
-		return SerializeResponse(request.RequestID, "HELP", "-", "HOME;SHELTER;MED;ROAD;REPORT;HELP")
+		return SerializeResponse(request.RequestID, "HELP", "-", "HOME;SHELTER;MED;ROAD;REPORT;HELP;ALERT")
+	case "ALERT":
+		region, err := parseShelterRegion(request.Arguments)
+		if err != nil {
+			return "", err
+		}
+		alerts, err := server.store.FindActiveAlerts(region, time.Now().UTC())
+		if err != nil {
+			return "", err
+		}
+		if len(alerts) == 0 {
+			return SerializeError(request.RequestID, "NO_ALERTS", "No active alerts are available"), nil
+		}
+		alert := alerts[0]
+		return SerializeAlert(alert.AlertID, alert.Priority, alert.Expires, alert.Region, alert.Message)
 	default:
 		return SerializeError(request.RequestID, "NOT_IMPLEMENTED", fmt.Sprintf("command %s is not implemented", request.Command)), nil
 	}
