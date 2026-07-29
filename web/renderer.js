@@ -262,6 +262,8 @@
           data-map-location="${escapeHtml(shelter.location)}"
           data-map-spaces="${escapeHtml(shelter.spaces)}"
           data-map-status="${escapeHtml(shelter.status)}"
+          data-map-latitude="${escapeHtml(shelter.coordinates.latitude)}"
+          data-map-longitude="${escapeHtml(shelter.coordinates.longitude)}"
           title="${escapeHtml(`${shelter.location}: ${shelter.spaces} spaces, ${shelter.status}`)}"
           aria-label="${escapeHtml(`${shelter.location}, ${shelter.spaces} spaces, ${shelter.status}`)}"></button>`;
       }).join('');
@@ -283,12 +285,23 @@
           <text x="5" y="96" class="map-river-label">BURIGANGA</text>
         </svg>
         <div class="map-grid" aria-hidden="true"></div>
+        <svg class="map-route-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <path id="map-route-line" class="map-route-line" d=""></path>
+        </svg>
         <div class="map-label">DHK shelter markers</div>
         ${markers || '<p>No shelters with bundled coordinates are available.</p>'}
       </div>
       <div class="map-summary">
         <span>${markerRecords.length > 0 ? `${markerRecords.length} shelter markers` : 'No shelter markers'}</span>
         <span>Offline coordinates</span>
+      </div>
+      <div class="map-distance-panel">
+        <button id="map-locate" type="button">Use my location</button>
+        <p id="map-location-status" class="map-note">Allow location access to calculate straight-line distances.</p>
+        <ul id="map-distance-list" class="map-distance-list" aria-live="polite"></ul>
+        <button id="map-route" type="button">Find route to nearest open shelter</button>
+        <p id="map-route-status" class="map-note">Mirpur road coverage is bundled for route preview.</p>
+        <p class="map-attribution">Road data: &copy; OpenStreetMap contributors</p>
       </div>
       <p class="map-selection" id="map-selection">Tap a marker to view shelter details.</p>
       <p class="map-note">Illustrative backdrop only. Emergency navigation requires a verified offline road dataset and routing graph.</p>

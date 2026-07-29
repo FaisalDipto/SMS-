@@ -95,6 +95,11 @@ test('renders bundled shelter coordinates on the offline map', () => {
   assert.match(html, /map-marker-open/);
   assert.match(html, /data-map-location="MIRPUR"/);
   assert.match(html, /Tap a marker to view shelter details/);
+  assert.match(html, /Use my location/);
+  assert.match(html, /straight-line distances/);
+  assert.match(html, /Find route to nearest open shelter/);
+  assert.match(html, /map-route-overlay/);
+  assert.match(html, /OpenStreetMap contributors/);
   assert.match(html, /Illustrative backdrop only/);
 });
 

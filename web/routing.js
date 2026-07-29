@@ -1,0 +1,160 @@
+(function attachRouting(root, factory) {
+  const geo = root?.SMSWeb?.geo || (typeof require === 'function' ? require('./geo.js') : undefined);
+  const routing = factory(geo);
+
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = routing;
+  }
+
+  if (root) {
+    root.SMSWeb = root.SMSWeb || {};
+    root.SMSWeb.routing = routing;
+  }
+})(typeof window !== 'undefined' ? window : globalThis, (geo) => {
+  'use strict';
+
+  function requireGraph(graph) {
+    if (!graph || typeof graph.nodes !== 'object' || typeof graph.edges !== 'object') {
+      throw new Error('Routing graph must contain nodes and edges');
+    }
+  }
+
+  function nodeCoordinate(graph, nodeId) {
+    const node = graph.nodes[nodeId];
+    if (!node || !Number.isFinite(node.latitude) || !Number.isFinite(node.longitude)) {
+      throw new Error(`Routing graph node is invalid: ${nodeId}`);
+    }
+    return node;
+  }
+
+  function edgeDistanceMeters(graph, fromId, edge) {
+    if (!edge || typeof edge.to !== 'string') {
+      throw new Error(`Routing graph edge from ${fromId} is invalid`);
+    }
+    if (edge.distanceMeters !== undefined) {
+      if (!Number.isFinite(edge.distanceMeters) || edge.distanceMeters < 0) {
+        throw new Error(`Routing graph edge from ${fromId} has invalid distance`);
+      }
+      return edge.distanceMeters;
+    }
+    if (!geo) {
+      throw new Error('Geographic distance support is unavailable');
+    }
+    return geo.distanceKm(nodeCoordinate(graph, fromId), nodeCoordinate(graph, edge.to)) * 1000;
+  }
+
+  function findNearestNode(graph, coordinate) {
+    requireGraph(graph);
+    if (!geo) throw new Error('Geographic distance support is unavailable');
+
+    let nearest;
+    for (const nodeId of Object.keys(graph.nodes)) {
+      const node = nodeCoordinate(graph, nodeId);
+      const distanceMeters = geo.distanceKm(coordinate, node) * 1000;
+      if (!nearest || distanceMeters < nearest.distanceMeters) {
+        nearest = { nodeId, distanceMeters };
+      }
+    }
+    return nearest;
+  }
+
+  class MinHeap {
+    constructor() {
+      this.items = [];
+    }
+
+    push(item) {
+      this.items.push(item);
+      this.bubbleUp(this.items.length - 1);
+    }
+
+    pop() {
+      if (this.items.length === 0) return undefined;
+      const first = this.items[0];
+      const last = this.items.pop();
+      if (this.items.length > 0) {
+        this.items[0] = last;
+        this.sinkDown(0);
+      }
+      return first;
+    }
+
+    bubbleUp(index) {
+      while (index > 0) {
+        const parent = Math.floor((index - 1) / 2);
+        if (this.items[parent].priority <= this.items[index].priority) break;
+        [this.items[parent], this.items[index]] = [this.items[index], this.items[parent]];
+        index = parent;
+      }
+    }
+
+    sinkDown(index) {
+      while (true) {
+        const left = index * 2 + 1;
+        const right = left + 1;
+        let smallest = index;
+        if (left < this.items.length && this.items[left].priority < this.items[smallest].priority) {
+          smallest = left;
+        }
+        if (right < this.items.length && this.items[right].priority < this.items[smallest].priority) {
+          smallest = right;
+        }
+        if (smallest === index) break;
+        [this.items[index], this.items[smallest]] = [this.items[smallest], this.items[index]];
+        index = smallest;
+      }
+    }
+  }
+
+  function shortestPath(graph, origin, destination, { blockedEdges = new Set() } = {}) {
+    requireGraph(graph);
+    if (!geo) throw new Error('Geographic distance support is unavailable');
+
+    const start = findNearestNode(graph, origin);
+    const target = findNearestNode(graph, destination);
+    const distances = new Map([[start.nodeId, 0]]);
+    const previous = new Map();
+    const queue = new MinHeap();
+    queue.push({ nodeId: start.nodeId, priority: 0 });
+
+    while (true) {
+      const current = queue.pop();
+      if (!current) break;
+      if (current.priority !== distances.get(current.nodeId)) continue;
+      if (current.nodeId === target.nodeId) break;
+
+      for (const edge of graph.edges[current.nodeId] || []) {
+        if (edge.id && blockedEdges.has(edge.id)) continue;
+        const edgeDistance = edgeDistanceMeters(graph, current.nodeId, edge);
+        const candidate = current.priority + edgeDistance;
+        if (candidate >= (distances.get(edge.to) ?? Number.POSITIVE_INFINITY)) continue;
+        distances.set(edge.to, candidate);
+        previous.set(edge.to, current.nodeId);
+        queue.push({ nodeId: edge.to, priority: candidate });
+      }
+    }
+
+    if (!distances.has(target.nodeId)) {
+      throw new Error('No available route connects the selected locations');
+    }
+
+    const nodeIds = [];
+    for (let nodeId = target.nodeId; nodeId; nodeId = previous.get(nodeId)) {
+      nodeIds.unshift(nodeId);
+    }
+
+    return {
+      distanceMeters: distances.get(target.nodeId) + start.distanceMeters + target.distanceMeters,
+      nodeIds,
+      coordinates: [
+        { latitude: origin.latitude, longitude: origin.longitude },
+        ...nodeIds.map((nodeId) => nodeCoordinate(graph, nodeId)),
+        { latitude: destination.latitude, longitude: destination.longitude }
+      ],
+      originSnap: start,
+      destinationSnap: target
+    };
+  }
+
+  return Object.freeze({ findNearestNode, shortestPath });
+});

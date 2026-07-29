@@ -8,12 +8,20 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
+import android.webkit.GeolocationPermissions
+import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import org.json.JSONObject
 
 class MainActivity : Activity() {
+    private companion object {
+        const val LOCATION_PERMISSION_REQUEST = 200
+    }
+
     private lateinit var webView: WebView
+    private var pendingGeolocationOrigin: String? = null
+    private var pendingGeolocationCallback: GeolocationPermissions.Callback? = null
 
     private val responseReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
@@ -38,7 +46,29 @@ class MainActivity : Activity() {
             settings.domStorageEnabled = true
             settings.allowFileAccess = true
             settings.allowContentAccess = true
+            settings.setGeolocationEnabled(true)
             webViewClient = WebViewClient()
+            webChromeClient = object : WebChromeClient() {
+                override fun onGeolocationPermissionsShowPrompt(
+                    origin: String,
+                    callback: GeolocationPermissions.Callback
+                ) {
+                    if (hasLocationPermission()) {
+                        callback.invoke(origin, true, false)
+                        return
+                    }
+
+                    pendingGeolocationOrigin = origin
+                    pendingGeolocationCallback = callback
+                    requestPermissions(
+                        arrayOf(
+                            Manifest.permission.ACCESS_FINE_LOCATION,
+                            Manifest.permission.ACCESS_COARSE_LOCATION
+                        ),
+                        LOCATION_PERMISSION_REQUEST
+                    )
+                }
+            }
             addJavascriptInterface(GatewayWebBridge(this@MainActivity, this), "smsWeb")
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
             loadUrl("file:///android_asset/index.html")
@@ -52,7 +82,34 @@ class MainActivity : Activity() {
         }
     }
 
+    private fun hasLocationPermission(): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        return checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED ||
+            checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode != LOCATION_PERMISSION_REQUEST) return
+
+        val granted = grantResults.any {
+            it == android.content.pm.PackageManager.PERMISSION_GRANTED
+        }
+        pendingGeolocationCallback?.invoke(pendingGeolocationOrigin, granted, false)
+        pendingGeolocationOrigin = null
+        pendingGeolocationCallback = null
+    }
+
     override fun onDestroy() {
+        pendingGeolocationCallback?.invoke(pendingGeolocationOrigin, false, false)
+        pendingGeolocationOrigin = null
+        pendingGeolocationCallback = null
         webView.destroy()
         super.onDestroy()
     }

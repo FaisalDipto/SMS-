@@ -785,6 +785,12 @@ RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.400
 
 The parser validates the latitude, longitude, status, timestamp, and expiry. A valid record is stored in IndexedDB and rendered as a marker on the local map. The marker and basemap require no internet request. The current demo seed coordinates identify named areas, not verified shelter entrances; they must be replaced with authoritative shelter coordinates before emergency navigation is enabled.
 
+The dashboard can request the phone's location and calculate great-circle (straight-line) distances to coordinate-bearing shelters. These distances are not road travel distances and must not be presented as an emergency route.
+
+The routing engine uses a separate local graph containing road nodes and directed edges. Each edge has a distance and can be marked blocked by an emergency report. The current demo bundles one small Mirpur graph generated from licensed OpenStreetMap data; it is deliberately limited to that tile until wider coverage is verified.
+
+The current route preview bundles one real OpenStreetMap road tile covering a small Mirpur area. It can calculate a road route only when both the phone location and the selected shelter fall inside that tile. The UI must report when a location is outside coverage. The bundled road data includes OpenStreetMap attribution.
+
 Recommended implementation:
 
 - **MapLibre GL JS** for interactive vector-map rendering.
@@ -794,7 +800,7 @@ Recommended implementation:
 
 For a small proof of concept, Leaflet with a small local raster tile set is acceptable. Do not use `tile.openstreetmap.org` as an offline tile source; its policy prohibits bulk downloading and offline use. Use self-hosted data or a provider that explicitly permits offline packaging.
 
-Showing a marker is different from calculating a route. Offline route calculation requires a local routing graph and is a later feature.
+Showing a marker is different from calculating a route. The current route preview uses the bundled Mirpur graph, reports when coverage is unavailable, and must not be treated as full-Dhaka emergency navigation until authoritative shelter entrances, wider road coverage, and verified hazard blocking are added.
 
 ### Coordinate response format
 

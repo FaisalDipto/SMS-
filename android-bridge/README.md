@@ -14,7 +14,8 @@ The phone receives `REQ|...` SMS messages, validates their format, queues them, 
 6. For an outbound request demo, enter the gateway SMS number and tap **Save number**.
 7. Tap **Request shelters** to create and send a `REQ|1|...|SHELTER|DHK` SMS.
 8. Tap **Request alerts** to create and send a `REQ|1|...|ALERT|DHK` SMS.
-9. Confirm the SMSWeb dashboard opens in the app and shows **Connected**.
+9. On the Map page, grant location permission when prompted to calculate straight-line shelter distances.
+10. Confirm the SMSWeb dashboard opens in the app and shows **Connected**.
 
 The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL, checking the local `/health` endpoint, and rendering structured responses received from the Pi. Responses are retained in the native queue until the dashboard confirms that they were stored offline, so closing the app does not lose information.
 
