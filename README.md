@@ -56,7 +56,7 @@ No webpage was downloaded from the internet. The page was generated from the SMS
                                   |
        +--------------------------+--------------------------+
        |                                                     |
-  User phone                                          Crisis service
+   User phone                                    Raspberry Pi Go service
        |                                                     |
        | SMS request                                         |
        +---------------------> SMS receiver                 |
@@ -66,13 +66,13 @@ No webpage was downloaded from the internet. The page was generated from the SMS
        |
        v
 +-------------------+
-| Android SMS Bridge |
-| - reads SMS        |
-| - validates sender |
-| - forwards payload |
+| Android Phone SMS Gateway |
+| - reads SMS               |
+| - validates sender        |
+| - forwards payload        |
 +---------+---------+
           |
-          | local app bridge / localhost API
+          | local HTTP API / Wi-Fi hotspot
           v
 +-------------------+
 | SMSWeb PWA         |
@@ -102,30 +102,73 @@ Responsibilities:
 - Track message status and expiry times.
 - Provide a simulator mode for development.
 
-#### 3.2 Android SMS Bridge
+#### 3.2 Android Phone SMS Gateway
 
-The companion Android application is needed because browsers are not allowed to access SMS inboxes directly.
+No GSM module is required. The Android phone with a SIM performs the SMS gateway role.
 
 Responsibilities:
 
-- Request SMS read and receive permissions.
-- Listen for messages from the configured service number.
-- Verify the sender number.
-- Pass validated payloads to the local web application.
-- Optionally launch the PWA or expose a local bridge endpoint.
+- Receive incoming SMS messages.
+- Validate the sender and message format.
+- Forward SMS payloads to the Raspberry Pi over the local hotspot network.
+- Receive responses from the Raspberry Pi.
+- Send response SMS messages back to users.
+- Queue messages if the Raspberry Pi is temporarily unavailable.
 
-For a first prototype, the bridge can simply display received payloads and provide a **Send to Web App** button. Automatic forwarding can be added later.
+The Android phone should run a Kotlin companion application. The app communicates with the Pi through a local HTTP API, such as:
 
-#### 3.3 Crisis SMS Service
+```text
+http://raspberry-pi-local-ip:8080/sms/incoming
+```
 
-The service receives commands, looks up crisis data, and returns compact responses. It can be implemented in Node.js, Python, or Java.
+For multiple users, use a dedicated Android phone as the gateway so it can remain powered, connected to the Pi, and available to receive SMS messages.
 
-There are two deployment modes:
+#### 3.3 Raspberry Pi Crisis Service
 
-1. **Development mode:** use a local simulator instead of real SMS.
-2. **Real SMS mode:** use a cloud SMS provider or an Android phone/GSM gateway with a SIM card.
+The Raspberry Pi runs the Go crisis service and SQLite database.
 
-For complete operation during an internet outage, the service must have its own cellular SMS connection. A cloud SMS API cannot receive messages if its internet connection is unavailable.
+The Android gateway sends SMS data to it over the local Wi-Fi hotspot.
+
+Responsibilities:
+
+- Parse incoming SMS requests.
+- Store messages in SQLite.
+- Process requests concurrently using a queue and worker pool.
+- Generate compact SMS responses.
+- Return responses to the Android gateway.
+- Manage shelters, alerts, roads, and medical resources.
+- Serve the offline administrator dashboard.
+
+The real outage architecture is:
+
+```text
+User SMS
+  ↓
+Android phone with SIM
+  ↓ Local hotspot
+Raspberry Pi Go service
+  ↓ Local hotspot
+Android phone
+  ↓ SMS
+User
+```
+
+Cloud SMS providers may be used for development, but they require internet access at the backend and are not suitable as the only gateway during a complete internet outage.
+
+### 3.4 Network topology during an outage
+
+The Android phone creates a local Wi-Fi hotspot. The Raspberry Pi connects to that hotspot. This local connection does not require internet access.
+
+```text
+Android phone hotspot
+       │
+       ├── Raspberry Pi
+       └── Administrator laptop
+```
+
+Cellular SMS remains separate from the local Wi-Fi network.
+
+SMS uses the cellular network, while communication between the phone and Pi uses the local hotspot.
 
 ## 4. Offline Data Flow
 
@@ -156,6 +199,19 @@ If SMS is unavailable:
 ```
 
 The application must never present old information as current.
+
+### SMS gateway flow
+
+```text
+1. User sends SMS to the Android gateway phone number.
+2. Android app receives the SMS.
+3. Android app validates the sender and message format.
+4. Android app sends the payload to the Pi over local HTTP.
+5. Go service processes the request and stores it in SQLite.
+6. Go service creates a response.
+7. Android app receives the response from the Pi.
+8. Android app sends the response back to the user by SMS.
+```
 
 ## 5. SMS Protocol Design
 
@@ -304,10 +360,14 @@ All received text must be escaped before being inserted into the DOM.
 
 Install:
 
-- Node.js 20 or later
+- Node.js 20 or later, only if using the JavaScript simulator
 - Git
-- Android Studio, only if building the SMS bridge
-- A modern Android phone for real SMS testing
+- Android phone with an active SIM card
+- Raspberry Pi
+- Local Wi-Fi hotspot capability
+- Android Studio
+- Go
+- SQLite
 
 Verify Node.js:
 
@@ -441,7 +501,33 @@ This allows the entire web application to be developed without a SIM card, SMS p
 
 ### Step 8: Build the response service
 
-Create a small Node.js service that maps commands to local crisis data.
+Create a Go service on the Raspberry Pi.
+
+Required endpoints:
+
+```text
+POST /sms/incoming
+POST /sms/response
+GET  /health
+```
+
+Example incoming request:
+
+```json
+{
+  "sender": "+8801XXXXXXXXX",
+  "text": "REQ|1|A17K|SHELTER|DHK"
+}
+```
+
+Example response returned to the Android gateway:
+
+```json
+{
+  "recipient": "+8801XXXXXXXXX",
+  "text": "RES|1|A17K|SHELTER|DHK|Mirpur Shelter|23.8069|90.3687|120|OPEN"
+}
+```
 
 Example command flow:
 
@@ -457,7 +543,20 @@ Use SQLite or JSON files for the first version. Add an administrator interface l
 
 ### Step 9: Add the Android SMS bridge
 
-Create an Android application with these responsibilities:
+Create an Android application that communicates with the Raspberry Pi using the Pi's local hotspot IP address.
+
+The Android app should implement:
+
+- Incoming SMS receiver
+- Outgoing SMS sender
+- Local HTTP client
+- Message queue
+- Retry handling
+- Sender verification
+- Duplicate request detection
+- Gateway connection status indicator
+
+The bridge must also:
 
 1. Request SMS permissions.
 2. Register an SMS receiver.
@@ -742,9 +841,13 @@ A complete production system is much larger, but a demo-grade version of the mai
 
 ### Required setup
 
-- One Android phone with a working SIM card
-- Android Studio and Kotlin
-- Node.js for the offline web application
+- Android phone with active SIM
+- Raspberry Pi
+- USB power supply for both devices
+- Local hotspot connection
+- Android Studio
+- Kotlin
+- Node.js only if using the JavaScript simulator
 - Go and SQLite for the service and administrator tools
 - A small prebuilt map for one city or region
 
@@ -778,19 +881,17 @@ To stay within 30 hours:
 ### Demonstration flow
 
 ```text
-Administrator creates or updates a shelter
-        ?
-Go service creates a signed SMS response
-        ?
-Android phone receives the SMS
-        ?
-Offline web application verifies and parses it
-        ?
-Shelter appears on the offline map
-        ?
-User requests a route
-        ?
-Local Dijkstra or A* algorithm calculates a route
+User sends SMS
+      ↓
+Android gateway receives SMS
+      ↓
+Gateway forwards request to Pi
+      ↓
+Go service processes request
+      ↓
+Gateway sends response SMS
+      ↓
+Offline app displays the result
 ```
 
 ### MVP acceptance criteria
