@@ -5,6 +5,7 @@ import android.content.Context
 object GatewayConfig {
     private const val PREFERENCES = "smsweb_gateway"
     private const val PI_URL = "pi_url"
+    private const val SERVICE_NUMBER = "service_number"
     private const val TRUSTED_SENDERS = "trusted_senders"
     const val DEFAULT_PI_URL = "http://192.168.43.1:8080"
 
@@ -18,6 +19,19 @@ object GatewayConfig {
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .edit()
             .putString(PI_URL, value.trim().trimEnd('/'))
+            .apply()
+    }
+
+    fun serviceNumber(context: Context): String = context
+        .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        .getString(SERVICE_NUMBER, "")
+        .orEmpty()
+        .trim()
+
+    fun saveServiceNumber(context: Context, value: String) {
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(SERVICE_NUMBER, value.trim())
             .apply()
     }
 

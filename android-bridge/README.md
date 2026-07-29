@@ -11,7 +11,9 @@ The phone receives `REQ|...` SMS messages, validates their format, queues them, 
 3. Grant SMS permissions when the app starts.
 4. In the dashboard, set the Raspberry Pi URL, for example `http://192.168.43.1:8080`, and tap **Save URL**.
 5. Tap **Check connection** while the Go service is running.
-6. Confirm the SMSWeb dashboard opens in the app and shows **Connected**.
+6. For an outbound request demo, enter the gateway SMS number and tap **Save number**.
+7. Tap **Request shelters** to create and send a `REQ|1|...|SHELTER|DHK` SMS.
+8. Confirm the SMSWeb dashboard opens in the app and shows **Connected**.
 
 The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL, checking the local `/health` endpoint, and rendering structured responses received from the Pi while the dashboard is open. SMS request and response delivery continues through the native gateway queue.
 

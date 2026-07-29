@@ -1,5 +1,5 @@
 (function attachGateway(root, factory) {
-  const gateway = factory(root?.smsWeb || null);
+  const gateway = factory(root?.smsWeb || null, root?.SMSWeb?.protocol || null);
 
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = gateway;
@@ -9,13 +9,16 @@
     root.SMSWeb = root.SMSWeb || {};
     root.SMSWeb.gateway = gateway;
   }
-})(typeof window !== 'undefined' ? window : globalThis, (nativeBridge) => {
+})(typeof window !== 'undefined' ? window : globalThis, (nativeBridge, protocol) => {
   'use strict';
 
-  function createGateway(bridge) {
+  function createGateway(bridge, protocolApi = protocol) {
     let badge;
     let status;
     let incomingHandler;
+    let serviceNumberInput;
+    let requestStatus;
+    let requestHandler;
 
     function setConnectionState(connected) {
       if (!badge || !status) return;
@@ -27,11 +30,26 @@
         : 'The Raspberry Pi service could not be reached. Queued SMS messages will retry.';
     }
 
-    function initialize({ urlInput, saveButton, checkButton, statusElement, badgeElement }) {
+    function initialize({
+      urlInput,
+      saveButton,
+      checkButton,
+      statusElement,
+      badgeElement,
+      serviceNumber,
+      saveServiceNumberButton,
+      requestSheltersButton,
+      requestStatusElement,
+      onRequest
+    }) {
       badge = badgeElement;
       status = statusElement;
+      serviceNumberInput = serviceNumber;
+      requestStatus = requestStatusElement;
+      requestHandler = typeof onRequest === 'function' ? onRequest : null;
 
-      if (!urlInput || !saveButton || !checkButton || !status || !badge) {
+      if (!urlInput || !saveButton || !checkButton || !status || !badge ||
+        !serviceNumberInput || !saveServiceNumberButton || !requestSheltersButton || !requestStatus) {
         return;
       }
 
@@ -39,10 +57,15 @@
         status.textContent = 'Native gateway controls are available in the Android app.';
         saveButton.disabled = true;
         checkButton.disabled = true;
+        saveServiceNumberButton.disabled = true;
+        requestSheltersButton.disabled = true;
         return;
       }
 
       urlInput.value = bridge.getPiUrl() || '';
+      serviceNumberInput.value = typeof bridge.getServiceNumber === 'function'
+        ? bridge.getServiceNumber() || ''
+        : '';
       status.textContent = 'Pi URL loaded. Check the connection when the service is running.';
 
       saveButton.addEventListener('click', () => {
@@ -57,6 +80,56 @@
         status.textContent = 'Checking the Raspberry Pi service...';
         bridge.checkPiConnection();
       });
+
+      saveServiceNumberButton.addEventListener('click', () => {
+        const savedNumber = bridge.saveServiceNumber(serviceNumberInput.value);
+        serviceNumberInput.value = savedNumber || serviceNumberInput.value.trim();
+        requestStatus.textContent = savedNumber
+          ? 'Gateway SMS number saved on this phone.'
+          : 'Enter the gateway SMS number.';
+      });
+
+      requestSheltersButton.addEventListener('click', () => {
+        try {
+          const result = sendShelterRequest(serviceNumberInput.value, 'DHK');
+          requestStatus.textContent = `Request ${result.requestId} queued for SMS delivery.`;
+          requestSheltersButton.dataset.requestId = result.requestId;
+          if (requestHandler) {
+            void requestHandler(result);
+          }
+        } catch (error) {
+          requestStatus.textContent = error.message;
+        }
+      });
+    }
+
+    function createRequestId() {
+      return `R${Date.now().toString(36).slice(-5).toUpperCase()}`;
+    }
+
+    function sendShelterRequest(recipient, region) {
+      if (!bridge || typeof bridge.sendSms !== 'function') {
+        throw new Error('SMS sending is available in the Android app.');
+      }
+      if (!protocolApi?.serializeRequest) {
+        throw new Error('SMS protocol is unavailable.');
+      }
+
+      const requestId = createRequestId();
+      const rawText = protocolApi.serializeRequest({
+        requestId,
+        command: 'SHELTER',
+        arguments: region.trim().toUpperCase()
+      });
+      const sendStatus = bridge.sendSms(recipient, rawText);
+
+      if (sendStatus !== 'queued') {
+        throw new Error(sendStatus === 'permission-denied'
+          ? 'SMS permission is not granted.'
+          : 'The request could not be sent. Check the gateway number.');
+      }
+
+      return { requestId, rawText, status: sendStatus };
     }
 
     function receiveConnectionStatus(connected) {
@@ -71,7 +144,13 @@
       return incomingHandler ? incomingHandler(rawText) : undefined;
     }
 
-    return { initialize, receiveConnectionStatus, setIncomingHandler, receiveSms };
+    return {
+      initialize,
+      receiveConnectionStatus,
+      setIncomingHandler,
+      receiveSms,
+      sendShelterRequest
+    };
   }
 
   return Object.assign(createGateway(nativeBridge), { createGateway });

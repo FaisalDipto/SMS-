@@ -13,7 +13,20 @@
     saveButton: document.querySelector('#save-pi-url'),
     checkButton: document.querySelector('#check-pi-connection'),
     statusElement: document.querySelector('#gateway-status'),
-    badgeElement: document.querySelector('#gateway-connection-badge')
+    badgeElement: document.querySelector('#gateway-connection-badge'),
+    serviceNumber: document.querySelector('#service-number'),
+    saveServiceNumberButton: document.querySelector('#save-service-number'),
+    requestSheltersButton: document.querySelector('#request-shelters'),
+    requestStatusElement: document.querySelector('#request-status'),
+    onRequest: async (request) => {
+      await window.SMSWeb.storage.saveMessage({
+        requestId: request.requestId,
+        direction: 'outgoing',
+        rawText: request.rawText,
+        status: 'queued',
+        source: 'android-dashboard'
+      });
+    }
   });
 
   const navigation = window.SMSWeb.navigation;
