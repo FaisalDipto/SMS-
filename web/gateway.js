@@ -15,6 +15,7 @@
   function createGateway(bridge) {
     let badge;
     let status;
+    let incomingHandler;
 
     function setConnectionState(connected) {
       if (!badge || !status) return;
@@ -62,7 +63,15 @@
       setConnectionState(Boolean(connected));
     }
 
-    return { initialize, receiveConnectionStatus };
+    function setIncomingHandler(handler) {
+      incomingHandler = typeof handler === 'function' ? handler : null;
+    }
+
+    function receiveSms(rawText) {
+      return incomingHandler ? incomingHandler(rawText) : undefined;
+    }
+
+    return { initialize, receiveConnectionStatus, setIncomingHandler, receiveSms };
   }
 
   return Object.assign(createGateway(nativeBridge), { createGateway });

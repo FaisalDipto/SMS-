@@ -13,7 +13,7 @@ The phone receives `REQ|...` SMS messages, validates their format, queues them, 
 5. Tap **Check connection** while the Go service is running.
 6. Confirm the SMSWeb dashboard opens in the app and shows **Connected**.
 
-The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL and checking the local `/health` endpoint. SMS request and response delivery continues through the native gateway queue.
+The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL, checking the local `/health` endpoint, and rendering structured responses received from the Pi while the dashboard is open. SMS request and response delivery continues through the native gateway queue.
 
 The app uses cleartext HTTP because the Pi endpoint is on the private hotspot network. Do not expose this endpoint directly to the public internet.
 

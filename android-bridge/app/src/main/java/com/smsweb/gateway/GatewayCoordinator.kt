@@ -1,6 +1,7 @@
 package com.smsweb.gateway
 
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.telephony.SmsManager
 import android.telephony.SubscriptionManager
@@ -23,6 +24,11 @@ class GatewayCoordinator(private val context: Context) {
                 val response = pi.incoming(item.sender, item.text)
                 database.markForwarded(item.id)
                 database.enqueueToUser(response.recipient, response.text, item.subscriptionId)
+                context.sendBroadcast(Intent(GatewayEvents.ACTION_PI_RESPONSE).apply {
+                    setPackage(context.packageName)
+                    putExtra(GatewayEvents.EXTRA_REQUEST_ID, SmsProtocol.messageId(response.text))
+                    putExtra(GatewayEvents.EXTRA_TEXT, response.text)
+                })
             } catch (_: Exception) {
                 database.markRetry(item.id)
                 retryNeeded = true

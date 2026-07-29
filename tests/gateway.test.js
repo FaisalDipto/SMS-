@@ -65,3 +65,16 @@ test('updates the badge when the native health result arrives', () => {
   assert.equal(badge.textContent, 'Connected');
   assert.match(status.textContent, /reachable/);
 });
+
+test('forwards native SMS responses to the registered handler', () => {
+  const instance = gateway.createGateway(null);
+  let received;
+
+  instance.setIncomingHandler((rawText) => {
+    received = rawText;
+    return 'handled';
+  });
+
+  assert.equal(instance.receiveSms('RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL'), 'handled');
+  assert.equal(received, 'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL');
+});

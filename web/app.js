@@ -22,11 +22,21 @@
     appView
   });
 
-  window.SMSWeb.simulator.initialize({
+  const simulator = window.SMSWeb.simulator;
+  simulator.initialize({
     input: document.querySelector('#sms-input'),
     button: document.querySelector('#parse-sms'),
     status: document.querySelector('#simulator-status'),
     appView
+  });
+
+  window.SMSWeb.gateway.setIncomingHandler(async (rawText) => {
+    try {
+      const result = await simulator.handleSms(rawText, appView, Date.now(), 'android-gateway');
+      statusMessage.textContent = result;
+    } catch (error) {
+      statusMessage.textContent = `Received SMS could not be rendered: ${error.message}`;
+    }
   });
 
   if ('serviceWorker' in navigator) {

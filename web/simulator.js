@@ -17,7 +17,7 @@
   'use strict';
 
   function createSimulator({ protocol, storage, renderer }) {
-    async function handleSms(rawText, appView, now = Date.now()) {
+    async function handleSms(rawText, appView, now = Date.now(), source = 'simulator') {
       if (typeof rawText !== 'string' || rawText.trim() === '') {
         throw new Error('Paste an SMS message before parsing');
       }
@@ -36,6 +36,7 @@
           direction: 'incoming',
           rawText,
           status: 'received',
+          source,
           createdAt: now
         });
 
@@ -50,7 +51,7 @@
           payload: response.payload,
           content: response.payload,
           receivedAt: now,
-          source: 'simulator'
+          source
         };
 
         await storage.savePage(page);
@@ -65,7 +66,7 @@
           ...alert,
           expiresAt: alert.expires * 1_000,
           receivedAt: now,
-          source: 'simulator'
+          source
         };
 
         await storage.saveMessage({
@@ -73,6 +74,7 @@
           direction: 'incoming',
           rawText,
           status: 'received',
+          source,
           createdAt: now
         });
         await storage.saveAlert(record);
