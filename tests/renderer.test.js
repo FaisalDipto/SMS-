@@ -69,3 +69,15 @@ test('rejects malformed shelter payloads', () => {
   assert.throws(() => renderer.parseShelterPayload('MIRPUR:-1:OPEN'), /location and spaces/);
   assert.throws(() => renderer.parseShelterPayload('MIRPUR:12:BROKEN'), /Unknown shelter status/);
 });
+
+test('renders bundled shelter coordinates on the offline map', () => {
+  const html = renderer.renderMapPage({
+    region: 'DHK',
+    payload: 'MIRPUR:120:OPEN;UTTARA:80:OPEN',
+    receivedAt: 1_700_000_000_000
+  }, 1_700_000_000_000);
+
+  assert.match(html, /DHK shelter markers/);
+  assert.match(html, /2 shelter markers/);
+  assert.match(html, /map-marker-open/);
+});

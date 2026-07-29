@@ -29,19 +29,21 @@ test('loads stored shelter data when the shelters page is selected', async () =>
   assert.deepEqual(calls, [[view, 'shelter:MIRPUR:120:OPEN']]);
 });
 
-test('shows the map placeholder page', async () => {
+test('shows the offline shelter map page', async () => {
   const calls = [];
   const view = {};
   const instance = navigation.createNavigation({
-    storage: {},
+    storage: {
+      getPage: async () => ({ payload: 'MIRPUR:120:OPEN' })
+    },
     renderer: {
-      mount: (target, html) => calls.push([target, html])
+      mount: (target, html) => calls.push([target, html]),
+      renderMapPage: (page) => `map:${page.payload}`
     }
   });
 
   await instance.show('MAP', view);
 
   assert.equal(calls.length, 1);
-  assert.match(calls[0][1], /Crisis map/);
-  assert.match(calls[0][1], /Map package not installed/);
+  assert.equal(calls[0][1], 'map:MIRPUR:120:OPEN');
 });

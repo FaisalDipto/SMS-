@@ -19,6 +19,11 @@
     UNKNOWN: { label: 'Unknown', className: 'status-unknown' }
   });
   const ALERT_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+  const SHELTER_COORDINATES = Object.freeze({
+    DU: { latitude: 23.7271, longitude: 90.3944 },
+    MIRPUR: { latitude: 23.8069, longitude: 90.3687 },
+    UTTARA: { latitude: 23.8759, longitude: 90.4002 }
+  });
 
   function escapeHtml(value) {
     return String(value ?? '')
@@ -222,6 +227,47 @@
     });
   }
 
+  function renderMapPage(page = {}, now = Date.now()) {
+    const shelters = parseShelterPayload(page.payload ?? page.content ?? '');
+    const bounds = { minLatitude: 23.70, maxLatitude: 23.90, minLongitude: 90.34, maxLongitude: 90.43 };
+    const markerRecords = shelters
+      .map((shelter) => ({ ...shelter, coordinates: SHELTER_COORDINATES[shelter.location] }))
+      .filter((shelter) => shelter.coordinates);
+    const markers = markerRecords.map((shelter) => {
+        const left = ((shelter.coordinates.longitude - bounds.minLongitude) /
+          (bounds.maxLongitude - bounds.minLongitude)) * 100;
+        const top = ((bounds.maxLatitude - shelter.coordinates.latitude) /
+          (bounds.maxLatitude - bounds.minLatitude)) * 100;
+        const statusClass = shelter.status.toLowerCase();
+        return `<span class="map-marker map-marker-${escapeHtml(statusClass)}"
+          style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"
+          title="${escapeHtml(`${shelter.location}: ${shelter.spaces} spaces, ${shelter.status}`)}"
+          aria-label="${escapeHtml(`${shelter.location}, ${shelter.spaces} spaces, ${shelter.status}`)}"></span>`;
+      }).join('');
+    const unknownLocations = shelters.filter((shelter) => !SHELTER_COORDINATES[shelter.location]);
+    const body = `<div class="map-placeholder map-data-view" role="img" aria-label="Offline Dhaka shelter map">
+        <div class="map-grid" aria-hidden="true"></div>
+        <div class="map-label">DHK shelter markers</div>
+        ${markers || '<p>No shelters with bundled coordinates are available.</p>'}
+      </div>
+      <div class="map-summary">
+        <span>${markerRecords.length > 0 ? `${markerRecords.length} shelter markers` : 'No shelter markers'}</span>
+        <span>Offline coordinates</span>
+      </div>
+      ${unknownLocations.length > 0
+        ? `<p class="map-note">No bundled coordinate is available for ${escapeHtml(unknownLocations.map((shelter) => shelter.location).join(', '))}.</p>`
+        : ''}`;
+
+    return renderPageFrame({
+      pageClass: 'page-view-map',
+      title: 'Crisis map',
+      region: page.region || 'DHK',
+      record: page,
+      now,
+      body
+    });
+  }
+
   function renderPage(page, now = Date.now()) {
     switch (page.page || page.type) {
       case 'HOME':
@@ -252,6 +298,7 @@
     renderHomePage,
     renderShelterPage,
     renderAlertsPage,
+    renderMapPage,
     renderPage,
     mount
   };

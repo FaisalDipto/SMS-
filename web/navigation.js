@@ -18,24 +18,6 @@
   function createNavigation({ storage, renderer }) {
     let currentPage = 'HOME';
 
-    function renderMapPlaceholder(appView) {
-      renderer.mount(appView, `<article class="page-view page-view-map">
-        <header class="page-view-header">
-          <div>
-            <p class="eyebrow">Offline map</p>
-            <h2>Crisis map</h2>
-          </div>
-          <span class="freshness freshness-unknown">Map package not installed</span>
-        </header>
-        <div class="map-placeholder" role="img" aria-label="Offline map coming soon">
-          <div class="map-grid" aria-hidden="true"></div>
-          <div class="map-pin map-pin-one" aria-hidden="true"></div>
-          <div class="map-pin map-pin-two" aria-hidden="true"></div>
-          <p>Offline shelter and hazard markers will appear here when a regional map package is added.</p>
-        </div>
-      </article>`);
-    }
-
     async function show(page, appView) {
       currentPage = page;
 
@@ -65,7 +47,14 @@
         }
 
         if (page === 'MAP') {
-          renderMapPlaceholder(appView);
+          const record = typeof storage?.getPage === 'function'
+            ? await storage.getPage('SHELTER:DHK')
+            : null;
+          renderer.mount(appView, renderer.renderMapPage(record || {
+            title: 'Crisis map',
+            region: 'DHK',
+            payload: ''
+          }));
           return;
         }
 
