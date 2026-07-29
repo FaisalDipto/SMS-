@@ -18,6 +18,20 @@
   function createNavigation({ storage, renderer }) {
     let currentPage = 'HOME';
 
+    function bindMapInteractions(appView) {
+      if (typeof appView.querySelector !== 'function') return;
+      const map = appView.querySelector('.map-data-view');
+      const selection = appView.querySelector('#map-selection');
+      if (!map || !selection) return;
+
+      map.addEventListener('click', (event) => {
+        const marker = event.target.closest('[data-map-location]');
+        if (!marker) return;
+
+        selection.textContent = `${marker.dataset.mapLocation}: ${marker.dataset.mapSpaces} spaces, ${marker.dataset.mapStatus}.`;
+      });
+    }
+
     async function show(page, appView) {
       currentPage = page;
 
@@ -55,6 +69,7 @@
             region: 'DHK',
             payload: ''
           }));
+          bindMapInteractions(appView);
           return;
         }
 

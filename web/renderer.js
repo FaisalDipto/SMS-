@@ -239,10 +239,13 @@
         const top = ((bounds.maxLatitude - shelter.coordinates.latitude) /
           (bounds.maxLatitude - bounds.minLatitude)) * 100;
         const statusClass = shelter.status.toLowerCase();
-        return `<span class="map-marker map-marker-${escapeHtml(statusClass)}"
+        return `<button type="button" class="map-marker map-marker-${escapeHtml(statusClass)}"
           style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"
+          data-map-location="${escapeHtml(shelter.location)}"
+          data-map-spaces="${escapeHtml(shelter.spaces)}"
+          data-map-status="${escapeHtml(shelter.status)}"
           title="${escapeHtml(`${shelter.location}: ${shelter.spaces} spaces, ${shelter.status}`)}"
-          aria-label="${escapeHtml(`${shelter.location}, ${shelter.spaces} spaces, ${shelter.status}`)}"></span>`;
+          aria-label="${escapeHtml(`${shelter.location}, ${shelter.spaces} spaces, ${shelter.status}`)}"></button>`;
       }).join('');
     const unknownLocations = shelters.filter((shelter) => !SHELTER_COORDINATES[shelter.location]);
     const body = `<div class="map-placeholder map-data-view" role="img" aria-label="Offline Dhaka shelter map">
@@ -254,6 +257,7 @@
         <span>${markerRecords.length > 0 ? `${markerRecords.length} shelter markers` : 'No shelter markers'}</span>
         <span>Offline coordinates</span>
       </div>
+      <p class="map-selection" id="map-selection">Tap a marker to view shelter details.</p>
       ${unknownLocations.length > 0
         ? `<p class="map-note">No bundled coordinate is available for ${escapeHtml(unknownLocations.map((shelter) => shelter.location).join(', '))}.</p>`
         : ''}`;

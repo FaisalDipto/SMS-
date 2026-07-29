@@ -441,12 +441,21 @@ h2 {
 .map-marker {
   position: absolute;
   z-index: 2;
+  display: block;
   width: 1.15rem;
   height: 1.15rem;
+  margin: 0;
   border: 0.25rem solid #ffffff;
   border-radius: 50% 50% 50% 0;
+  padding: 0;
+  cursor: pointer;
   box-shadow: 0 0.15rem 0.4rem rgba(23, 49, 47, 0.3);
   transform: translate(-50%, -100%) rotate(-45deg);
+}
+
+.map-marker:focus-visible {
+  outline: 3px solid #0f766e;
+  outline-offset: 3px;
 }
 
 .map-marker-open {
@@ -476,6 +485,15 @@ h2 {
   margin: 0.75rem 0 0;
   color: #55716d;
   font-size: 0.8rem;
+}
+
+.map-selection {
+  margin: 0.75rem 0 0;
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+  color: #17312f;
+  background: #e7f3ef;
+  font-size: 0.85rem;
 }
 
 .map-pin {
