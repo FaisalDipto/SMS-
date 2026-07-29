@@ -7,10 +7,11 @@
   }
 
   statusMessage.textContent = 'The local application shell is loaded and ready.';
-  window.SMSWeb.renderer.mount(appView, window.SMSWeb.renderer.renderHomePage({
-    title: 'Welcome to SMSWeb',
-    message: 'Choose a local information page to get started.'
-  }));
+  const navigation = window.SMSWeb.navigation;
+  navigation.initialize({
+    nav: document.querySelector('#app-nav'),
+    appView
+  });
 
   window.SMSWeb.simulator.initialize({
     input: document.querySelector('#sms-input'),
