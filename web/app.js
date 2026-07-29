@@ -11,4 +11,10 @@
     title: 'Welcome to SMSWeb',
     message: 'Choose a local information page to get started.'
   }));
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('./sw.js').catch(() => {
+      // The app remains usable without caching when service workers are unavailable.
+    });
+  }
 })();
