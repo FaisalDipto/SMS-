@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -61,7 +62,7 @@ func TestIncomingShelterRequest(t *testing.T) {
 	if gateway.Recipient != "+8801712345678" {
 		t.Fatalf("unexpected recipient: %s", gateway.Recipient)
 	}
-	if gateway.Text != "RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL;MIRPUR:120:OPEN;UTTARA:80:OPEN" {
+	if gateway.Text != "RES|1|A17K|SHELTER|1/1|DHK|DU:23.7271:90.3944:0:FULL;MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN" {
 		t.Fatalf("unexpected response text: %s", gateway.Text)
 	}
 
@@ -91,6 +92,51 @@ func TestIncomingAlertRequest(t *testing.T) {
 	}
 	if !strings.HasPrefix(gateway.Text, "ALT|1|F22P|HIGH|") {
 		t.Fatalf("unexpected alert response: %s", gateway.Text)
+	}
+}
+
+func TestMigratesLegacyShelterSchema(t *testing.T) {
+	databasePath := t.TempDir() + "/legacy.db"
+	database, err := sql.Open("sqlite", databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = database.Exec(`
+CREATE TABLE shelters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    region TEXT NOT NULL,
+    location TEXT NOT NULL,
+    spaces INTEGER NOT NULL,
+    status TEXT NOT NULL,
+    UNIQUE(region, location)
+)
+`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = database.Exec(`INSERT INTO shelters(region, location, spaces, status) VALUES ('DHK', 'MIRPUR', 120, 'OPEN')`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := database.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	store, err := OpenStore(databasePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+
+	shelters, err := store.FindShelters("DHK")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(shelters) != 3 {
+		t.Fatalf("expected migrated and seeded shelters, got %d", len(shelters))
+	}
+	if shelters[1].Latitude != 23.8069 || shelters[1].Longitude != 90.3687 {
+		t.Fatalf("expected migrated Mirpur coordinates, got %.4f, %.4f", shelters[1].Latitude, shelters[1].Longitude)
 	}
 }
 

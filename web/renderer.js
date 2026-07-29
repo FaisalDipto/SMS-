@@ -136,23 +136,36 @@
     return payload.split(';').map((entry) => {
       const fields = entry.split(':');
 
-      if (fields.length !== 3) {
-        throw new Error('Shelter entries must use LOCATION:SPACES:STATUS');
+      if (fields.length !== 3 && fields.length !== 5) {
+        throw new Error('Shelter entries must use LOCATION:SPACES:STATUS or LOCATION:LATITUDE:LONGITUDE:SPACES:STATUS');
       }
 
       const location = fields[0].trim();
-      const spaces = Number(fields[1]);
-      const status = fields[2].trim().toUpperCase();
+      const coordinateFields = fields.length === 5 ? fields.slice(1, 3).map(Number) : [];
+      const spaces = Number(fields.length === 5 ? fields[3] : fields[1]);
+      const status = fields[fields.length - 1].trim().toUpperCase();
 
       if (!location || !Number.isInteger(spaces) || spaces < 0) {
         throw new Error('Shelter location and spaces are invalid');
+      }
+
+      if (fields.length === 5 && (
+        !Number.isFinite(coordinateFields[0]) || coordinateFields[0] < -90 || coordinateFields[0] > 90 ||
+        !Number.isFinite(coordinateFields[1]) || coordinateFields[1] < -180 || coordinateFields[1] > 180
+      )) {
+        throw new Error('Shelter coordinates are invalid');
       }
 
       if (!SHELTER_STATUSES[status]) {
         throw new Error(`Unknown shelter status: ${status}`);
       }
 
-      return { location, spaces, status };
+      const shelter = { location, spaces, status };
+      if (fields.length === 5) {
+        shelter.latitude = coordinateFields[0];
+        shelter.longitude = coordinateFields[1];
+      }
+      return shelter;
     });
   }
 
@@ -231,7 +244,12 @@
     const shelters = parseShelterPayload(page.payload ?? page.content ?? '');
     const bounds = { minLatitude: 23.70, maxLatitude: 23.90, minLongitude: 90.34, maxLongitude: 90.43 };
     const markerRecords = shelters
-      .map((shelter) => ({ ...shelter, coordinates: SHELTER_COORDINATES[shelter.location] }))
+      .map((shelter) => ({
+        ...shelter,
+        coordinates: shelter.latitude === undefined
+          ? SHELTER_COORDINATES[shelter.location]
+          : { latitude: shelter.latitude, longitude: shelter.longitude }
+      }))
       .filter((shelter) => shelter.coordinates);
     const markers = markerRecords.map((shelter) => {
         const left = ((shelter.coordinates.longitude - bounds.minLongitude) /
@@ -247,8 +265,23 @@
           title="${escapeHtml(`${shelter.location}: ${shelter.spaces} spaces, ${shelter.status}`)}"
           aria-label="${escapeHtml(`${shelter.location}, ${shelter.spaces} spaces, ${shelter.status}`)}"></button>`;
       }).join('');
-    const unknownLocations = shelters.filter((shelter) => !SHELTER_COORDINATES[shelter.location]);
+    const unknownLocations = shelters.filter((shelter) =>
+      shelter.latitude === undefined && !SHELTER_COORDINATES[shelter.location]
+    );
     const body = `<div class="map-placeholder map-data-view" role="img" aria-label="Offline Dhaka shelter map">
+        <svg class="map-basemap" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+          <rect width="100" height="100" class="map-land"></rect>
+          <path class="map-water" d="M4 0 C18 18 13 34 25 48 S20 76 7 100 L0 100 L0 0 Z"></path>
+          <path class="map-road map-road-major" d="M12 92 C25 73 32 57 39 42 S57 16 72 4"></path>
+          <path class="map-road map-road-major" d="M2 64 C23 59 42 58 61 62 S84 73 100 86"></path>
+          <path class="map-road" d="M10 25 C29 31 48 29 70 20 S88 10 100 9"></path>
+          <path class="map-road" d="M35 100 C43 82 52 70 68 58 S83 36 92 15"></path>
+          <path class="map-road" d="M18 76 C37 72 55 76 78 91"></path>
+          <text x="69" y="11" class="map-place-label">UTTARA</text>
+          <text x="27" y="54" class="map-place-label">MIRPUR</text>
+          <text x="55" y="83" class="map-place-label">DU</text>
+          <text x="5" y="96" class="map-river-label">BURIGANGA</text>
+        </svg>
         <div class="map-grid" aria-hidden="true"></div>
         <div class="map-label">DHK shelter markers</div>
         ${markers || '<p>No shelters with bundled coordinates are available.</p>'}
@@ -258,6 +291,7 @@
         <span>Offline coordinates</span>
       </div>
       <p class="map-selection" id="map-selection">Tap a marker to view shelter details.</p>
+      <p class="map-note">Illustrative backdrop only. Emergency navigation requires a verified offline road dataset and routing graph.</p>
       ${unknownLocations.length > 0
         ? `<p class="map-note">No bundled coordinate is available for ${escapeHtml(unknownLocations.map((shelter) => shelter.location).join(', '))}.</p>`
         : ''}`;

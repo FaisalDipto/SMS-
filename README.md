@@ -780,10 +780,10 @@ Rendering:           MapLibre GL JS running locally
 Example SMS response:
 
 ```text
-RES|1|A17K|SHELTER|DHK|Mirpur Shelter|23.8069|90.3687|120|OPEN
+RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN;DU:23.7271:90.3944:0:FULL
 ```
 
-The parser validates the latitude, longitude, status, timestamp, and expiry. A valid record is stored in IndexedDB and rendered as a marker on the local map. The marker and basemap require no internet request.
+The parser validates the latitude, longitude, status, timestamp, and expiry. A valid record is stored in IndexedDB and rendered as a marker on the local map. The marker and basemap require no internet request. The current demo seed coordinates identify named areas, not verified shelter entrances; they must be replaced with authoritative shelter coordinates before emergency navigation is enabled.
 
 Recommended implementation:
 
@@ -801,16 +801,16 @@ Showing a marker is different from calculating a route. Offline route calculatio
 Use decimal coordinates instead of sending a full GeoJSON object:
 
 ```text
-RES|1|A17K|SHELTER|DHK|Mirpur Shelter|23.8069|90.3687|120|OPEN
+RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN
 ```
 
 For multiple locations:
 
 ```text
-RES|1|A17K|SHELTER|1/1|DHK|MIRPUR,23.8069,90.3687,120,O;UTTARA,23.8759,90.4002,80,O
+RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN
 ```
 
-Use short status codes where necessary: `O` open, `F` full, `C` closed, and `U` unknown. Include a timestamp, source, or confidence score when message size allows it.
+Use full status values in the current implementation: `OPEN`, `FULL`, `CLOSED`, and `UNKNOWN`. Include a timestamp, source, or confidence score when message size allows it.
 
 ## 15. Advanced Feature Roadmap
 

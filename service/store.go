@@ -21,10 +21,12 @@ type Message struct {
 }
 
 type Shelter struct {
-	Region   string
-	Location string
-	Spaces   int
-	Status   string
+	Region    string
+	Location  string
+	Latitude  float64
+	Longitude float64
+	Spaces    int
+	Status    string
 }
 
 type Alert struct {
@@ -66,6 +68,8 @@ CREATE TABLE IF NOT EXISTS shelters (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     region TEXT NOT NULL,
     location TEXT NOT NULL,
+    latitude REAL NOT NULL DEFAULT 0,
+    longitude REAL NOT NULL DEFAULT 0,
     spaces INTEGER NOT NULL,
     status TEXT NOT NULL,
     UNIQUE(region, location)
@@ -80,16 +84,85 @@ CREATE TABLE IF NOT EXISTS alerts (
     message TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO shelters(region, location, spaces, status) VALUES
-    ('DHK', 'MIRPUR', 120, 'OPEN'),
-    ('DHK', 'UTTARA', 80, 'OPEN'),
-    ('DHK', 'DU', 0, 'FULL');
-
 INSERT OR IGNORE INTO alerts(alert_id, priority, expires_at, region, message) VALUES
     ('F22P', 'HIGH', CAST(strftime('%s', 'now') AS INTEGER) + 86400, 'DHK', 'Avoid the road near Mirpur bridge');
 `)
 	if err != nil {
 		return fmt.Errorf("initialize sqlite database: %w", err)
+	}
+
+	// Existing demo databases were created before shelter coordinates existed.
+	// Keep them usable while adding the new geographic fields in place.
+	for _, column := range []string{"latitude", "longitude"} {
+		if err := store.ensureShelterColumn(column); err != nil {
+			return err
+		}
+	}
+	_, err = store.db.Exec(`
+INSERT OR IGNORE INTO shelters(region, location, latitude, longitude, spaces, status) VALUES
+    ('DHK', 'MIRPUR', 23.8069, 90.3687, 120, 'OPEN'),
+    ('DHK', 'UTTARA', 23.8759, 90.4002, 80, 'OPEN'),
+    ('DHK', 'DU', 23.7271, 90.3944, 0, 'FULL')
+`)
+	if err != nil {
+		return fmt.Errorf("seed shelters: %w", err)
+	}
+	_, err = store.db.Exec(`
+UPDATE shelters SET latitude = CASE location
+    WHEN 'MIRPUR' THEN 23.8069
+    WHEN 'UTTARA' THEN 23.8759
+    WHEN 'DU' THEN 23.7271
+    ELSE latitude
+END,
+longitude = CASE location
+    WHEN 'MIRPUR' THEN 90.3687
+    WHEN 'UTTARA' THEN 90.4002
+    WHEN 'DU' THEN 90.3944
+    ELSE longitude
+END
+WHERE region = 'DHK' AND (latitude = 0 OR longitude = 0)
+`)
+	if err != nil {
+		return fmt.Errorf("backfill shelter coordinates: %w", err)
+	}
+	return nil
+}
+
+func (store *Store) ensureShelterColumn(column string) error {
+	rows, err := store.db.Query("PRAGMA table_info(shelters)")
+	if err != nil {
+		return fmt.Errorf("inspect shelter schema: %w", err)
+	}
+	defer rows.Close()
+
+	var name string
+	var found bool
+	for rows.Next() {
+		var cid int
+		var columnType string
+		var notNull int
+		var defaultValue any
+		var primaryKey int
+		if err := rows.Scan(&cid, &name, &columnType, &notNull, &defaultValue, &primaryKey); err != nil {
+			return fmt.Errorf("read shelter schema: %w", err)
+		}
+		if name == column {
+			found = true
+			break
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("read shelter schema rows: %w", err)
+	}
+	if found {
+		return nil
+	}
+
+	if column != "latitude" && column != "longitude" {
+		return fmt.Errorf("unsupported shelter column: %s", column)
+	}
+	if _, err := store.db.Exec("ALTER TABLE shelters ADD COLUMN " + column + " REAL NOT NULL DEFAULT 0"); err != nil {
+		return fmt.Errorf("add shelter %s: %w", column, err)
 	}
 	return nil
 }
@@ -129,7 +202,7 @@ WHERE id = (SELECT id FROM messages WHERE request_id = ? ORDER BY id DESC LIMIT 
 
 func (store *Store) FindShelters(region string) ([]Shelter, error) {
 	rows, err := store.db.Query(`
-SELECT region, location, spaces, status
+SELECT region, location, latitude, longitude, spaces, status
 FROM shelters
 WHERE region = ?
 ORDER BY location
@@ -142,7 +215,7 @@ ORDER BY location
 	var shelters []Shelter
 	for rows.Next() {
 		var shelter Shelter
-		if err := rows.Scan(&shelter.Region, &shelter.Location, &shelter.Spaces, &shelter.Status); err != nil {
+		if err := rows.Scan(&shelter.Region, &shelter.Location, &shelter.Latitude, &shelter.Longitude, &shelter.Spaces, &shelter.Status); err != nil {
 			return nil, err
 		}
 		shelters = append(shelters, shelter)

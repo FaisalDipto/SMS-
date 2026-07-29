@@ -399,6 +399,7 @@ h2 {
 .map-grid {
   position: absolute;
   inset: 0;
+  z-index: 1;
   opacity: 0.45;
   background-image:
     linear-gradient(35deg, transparent 47%, #b7d2cd 48%, transparent 50%),
@@ -406,6 +407,51 @@ h2 {
     linear-gradient(#c9e3dc 1px, transparent 1px),
     linear-gradient(90deg, #c9e3dc 1px, transparent 1px);
   background-size: auto, auto, 2rem 2rem, 2rem 2rem;
+}
+
+.map-basemap {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.map-land {
+  fill: #e7f3ef;
+}
+
+.map-water {
+  fill: #c8e5e9;
+  opacity: 0.9;
+}
+
+.map-road {
+  fill: none;
+  stroke: #c3d6cf;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.map-road-major {
+  stroke: #a5c4bb;
+  stroke-width: 2.2;
+}
+
+.map-place-label,
+.map-river-label {
+  fill: #55716d;
+  font-family: system-ui, sans-serif;
+  font-size: 3px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
+.map-river-label {
+  fill: #4c8991;
+  font-size: 2.3px;
+  font-style: italic;
+  font-weight: 600;
 }
 
 .map-placeholder p {

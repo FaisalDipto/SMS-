@@ -133,7 +133,13 @@ func (server *Server) createResponse(request Request) (string, error) {
 
 		records := make([]string, 0, len(shelters))
 		for _, shelter := range shelters {
-			records = append(records, compactShelter(shelter.Location, shelter.Spaces, shelter.Status))
+			records = append(records, compactShelter(
+				shelter.Location,
+				shelter.Latitude,
+				shelter.Longitude,
+				shelter.Spaces,
+				shelter.Status,
+			))
 		}
 		return SerializeResponse(request.RequestID, "SHELTER", region, strings.Join(records, ";"))
 	case "HOME":

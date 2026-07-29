@@ -68,6 +68,17 @@ test('rejects malformed shelter payloads', () => {
   assert.throws(() => renderer.parseShelterPayload('MIRPUR:OPEN'), /LOCATION:SPACES:STATUS/);
   assert.throws(() => renderer.parseShelterPayload('MIRPUR:-1:OPEN'), /location and spaces/);
   assert.throws(() => renderer.parseShelterPayload('MIRPUR:12:BROKEN'), /Unknown shelter status/);
+  assert.throws(() => renderer.parseShelterPayload('MIRPUR:91:90.3687:12:OPEN'), /coordinates are invalid/);
+});
+
+test('parses shelter coordinates included in an SMS response', () => {
+  assert.deepEqual(renderer.parseShelterPayload('MIRPUR:23.8069:90.3687:120:OPEN'), [{
+    location: 'MIRPUR',
+    latitude: 23.8069,
+    longitude: 90.3687,
+    spaces: 120,
+    status: 'OPEN'
+  }]);
 });
 
 test('renders bundled shelter coordinates on the offline map', () => {
@@ -78,10 +89,13 @@ test('renders bundled shelter coordinates on the offline map', () => {
   }, 1_700_000_000_000);
 
   assert.match(html, /DHK shelter markers/);
+  assert.match(html, /map-basemap/);
+  assert.match(html, /BURIGANGA/);
   assert.match(html, /2 shelter markers/);
   assert.match(html, /map-marker-open/);
   assert.match(html, /data-map-location="MIRPUR"/);
   assert.match(html, /Tap a marker to view shelter details/);
+  assert.match(html, /Illustrative backdrop only/);
 });
 
 test('renders recent SMS activity safely', () => {

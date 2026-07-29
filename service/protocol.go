@@ -188,6 +188,12 @@ func parseShelterRegion(arguments string) (string, error) {
 	return region, nil
 }
 
-func compactShelter(location string, spaces int, status string) string {
-	return strings.Join([]string{location, strconv.Itoa(spaces), status}, ":")
+func compactShelter(location string, latitude, longitude float64, spaces int, status string) string {
+	return strings.Join([]string{
+		location,
+		strconv.FormatFloat(latitude, 'f', -1, 64),
+		strconv.FormatFloat(longitude, 'f', -1, 64),
+		strconv.Itoa(spaces),
+		status,
+	}, ":")
 }
