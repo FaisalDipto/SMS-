@@ -14,7 +14,7 @@ class SmsReceiver : BroadcastReceiver() {
         Thread {
             try {
                 val subscriptionId = intent.getIntExtra(
-                    Telephony.Sms.Intents.EXTRA_SUBSCRIPTION_INDEX,
+                    SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,
                     SubscriptionManager.INVALID_SUBSCRIPTION_ID
                 )
                 for (message in Telephony.Sms.Intents.getMessagesFromIntent(intent)) {
