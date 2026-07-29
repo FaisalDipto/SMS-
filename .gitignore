@@ -4,3 +4,7 @@ coverage/
 service/*.db
 service/*.db-*
 service/*.exe
+android-bridge/.gradle/
+android-bridge/build/
+android-bridge/app/build/
+android-bridge/local.properties
