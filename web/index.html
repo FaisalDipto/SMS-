@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0f766e" />
+    <title>SMSWeb</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="app-header">
+        <p class="eyebrow">Offline crisis information</p>
+        <h1>SMSWeb</h1>
+        <p class="intro">Useful local information, even when the internet is unavailable.</p>
+      </header>
+
+      <section class="status-card" aria-labelledby="status-title">
+        <div class="status-indicator" aria-hidden="true"></div>
+        <div>
+          <h2 id="status-title">Application ready</h2>
+          <p id="status-message">The local application shell is loaded.</p>
+        </div>
+      </section>
+
+      <section class="welcome-card" aria-labelledby="welcome-title">
+        <h2 id="welcome-title">Welcome</h2>
+        <p>
+          Shelter information and SMS response handling will appear here as the
+          application is built.
+        </p>
+      </section>
+    </main>
+
+    <script src="protocol.js"></script>
+    <script src="storage.js"></script>
+    <script src="renderer.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
