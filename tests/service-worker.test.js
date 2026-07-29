@@ -17,6 +17,7 @@ test('service worker caches every current application-shell asset', () => {
     './protocol.js',
     './storage.js',
     './renderer.js',
+    './simulator.js',
     './sw.js'
   ]) {
     assert.match(serviceWorker, new RegExp(`['"]${asset.replace('./', '\\./')}['"]`));

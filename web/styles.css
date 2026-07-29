@@ -257,6 +257,96 @@ h2 {
   font-size: 0.8rem;
 }
 
+.simulator-card {
+  margin-top: 1rem;
+  border: 1px solid #d4e5e1;
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 1rem 3rem rgba(23, 49, 47, 0.07);
+}
+
+.simulator-card .eyebrow {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+}
+
+.simulator-card h2 {
+  margin-bottom: 0.5rem;
+}
+
+.simulator-card > p:not(.eyebrow) {
+  margin-bottom: 1rem;
+}
+
+.simulator-card label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #17312f;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.simulator-card textarea {
+  display: block;
+  width: 100%;
+  resize: vertical;
+  border: 1px solid #b7d2cd;
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+  color: #17312f;
+  background: #f7fbfa;
+  font: 0.9rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.simulator-card textarea:focus {
+  outline: 3px solid #bde7df;
+  border-color: #0f766e;
+}
+
+.simulator-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.simulator-actions button {
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0.7rem 1rem;
+  color: #ffffff;
+  background: #0f766e;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.simulator-actions button:hover {
+  background: #115e59;
+}
+
+.simulator-actions button:focus-visible {
+  outline: 3px solid #bde7df;
+  outline-offset: 2px;
+}
+
+#simulator-status {
+  flex: 1 1 12rem;
+  margin: 0;
+  color: #55716d;
+  font-size: 0.85rem;
+}
+
+#simulator-status[data-state="success"] {
+  color: #166534;
+}
+
+#simulator-status[data-state="error"] {
+  color: #991b1b;
+}
+
 @media (max-width: 30rem) {
   .app-shell {
     padding-top: 2rem;

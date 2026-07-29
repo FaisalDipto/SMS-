@@ -24,11 +24,27 @@
       </section>
 
       <section id="app-view" aria-live="polite"></section>
+
+      <section class="simulator-card" aria-labelledby="simulator-title">
+        <p class="eyebrow">Developer mode</p>
+        <h2 id="simulator-title">SMS simulator</h2>
+        <p>
+          Paste a structured SMS response here while the Android gateway and
+          Raspberry Pi service are being built.
+        </p>
+        <label for="sms-input">SMS response</label>
+        <textarea id="sms-input" rows="4">RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:120:OPEN;UTTARA:80:OPEN;DU:0:FULL</textarea>
+        <div class="simulator-actions">
+          <button id="parse-sms" type="button">Parse and render</button>
+          <p id="simulator-status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
     </main>
 
     <script src="protocol.js"></script>
     <script src="storage.js"></script>
     <script src="renderer.js"></script>
+    <script src="simulator.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

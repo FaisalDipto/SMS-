@@ -12,6 +12,13 @@
     message: 'Choose a local information page to get started.'
   }));
 
+  window.SMSWeb.simulator.initialize({
+    input: document.querySelector('#sms-input'),
+    button: document.querySelector('#parse-sms'),
+    status: document.querySelector('#simulator-status'),
+    appView
+  });
+
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {
       // The app remains usable without caching when service workers are unavailable.
