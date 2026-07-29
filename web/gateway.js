@@ -168,11 +168,34 @@
       return incomingHandler ? incomingHandler(rawText) : undefined;
     }
 
+    async function replayPendingResponses() {
+      if (!incomingHandler || !bridge || typeof bridge.getPendingResponses !== 'function') {
+        return;
+      }
+
+      let responses;
+      try {
+        responses = JSON.parse(bridge.getPendingResponses() || '[]');
+      } catch (_error) {
+        return;
+      }
+
+      for (const response of Array.isArray(responses) ? responses : []) {
+        try {
+          await incomingHandler(response.text);
+          bridge.acknowledgeResponse?.(response.text);
+        } catch (_error) {
+          // Keep the response pending so the next app launch can retry it.
+        }
+      }
+    }
+
     return {
       initialize,
       receiveConnectionStatus,
       setIncomingHandler,
       receiveSms,
+      replayPendingResponses,
       sendShelterRequest,
       sendAlertRequest
     };

@@ -75,7 +75,7 @@ h2 {
 
 .app-nav {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.4rem;
   margin-bottom: 1rem;
   padding: 0.35rem;
@@ -487,6 +487,53 @@ h2 {
   font-size: 0.8rem;
 }
 
+.activity-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activity-item {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  border: 1px solid #d4e5e1;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background: #f7fbfa;
+}
+
+.activity-item p {
+  margin-bottom: 0.25rem;
+}
+
+.activity-direction {
+  color: #0f766e;
+  font-weight: 800;
+}
+
+.activity-status {
+  color: #55716d;
+  font-size: 0.8rem;
+}
+
+.activity-item code {
+  display: block;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: #17312f;
+  font-size: 0.75rem;
+}
+
+.activity-item time {
+  flex: 0 0 auto;
+  color: #55716d;
+  font-size: 0.75rem;
+}
+
 .map-selection {
   margin: 0.75rem 0 0;
   border-radius: 0.65rem;
@@ -627,7 +674,8 @@ h2 {
   }
 
   .page-view-header,
-  .resource-item {
+  .resource-item,
+  .activity-item {
     flex-direction: column;
     align-items: stretch;
   }
@@ -635,6 +683,10 @@ h2 {
   .page-view-header .freshness,
   .resource-item .freshness,
   .resource-item .status-badge {
+    align-self: flex-start;
+  }
+
+  .activity-item time {
     align-self: flex-start;
   }
 }

@@ -48,10 +48,13 @@
     try {
       const result = await simulator.handleSms(rawText, appView, Date.now(), 'android-gateway');
       statusMessage.textContent = result;
+      window.smsWeb?.acknowledgeResponse?.(rawText);
     } catch (error) {
       statusMessage.textContent = `Received SMS could not be rendered: ${error.message}`;
     }
   });
+
+  void window.SMSWeb.gateway.replayPendingResponses();
 
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('./sw.js').catch(() => {

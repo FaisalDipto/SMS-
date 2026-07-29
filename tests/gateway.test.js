@@ -132,3 +132,21 @@ test('serializes and sends an alert request through the native bridge', () => {
   assert.equal(sentText, result.rawText);
   assert.equal(protocol.parseRequest(result.rawText).command, 'ALERT');
 });
+
+test('replays pending native responses and acknowledges them', async () => {
+  const acknowledged = [];
+  const instance = gateway.createGateway({
+    getPendingResponses: () => JSON.stringify([{
+      id: 7,
+      text: 'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL'
+    }]),
+    acknowledgeResponse: (text) => acknowledged.push(text)
+  });
+  const received = [];
+
+  instance.setIncomingHandler(async (rawText) => received.push(rawText));
+  await instance.replayPendingResponses();
+
+  assert.deepEqual(received, ['RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL']);
+  assert.deepEqual(acknowledged, received);
+});

@@ -73,6 +73,14 @@
           return;
         }
 
+        if (page === 'ACTIVITY') {
+          const messages = typeof storage?.getRecentMessages === 'function'
+            ? await storage.getRecentMessages()
+            : [];
+          renderer.mount(appView, renderer.renderActivityPage(messages));
+          return;
+        }
+
         throw new Error(`Unsupported navigation page: ${page}`);
       } catch (error) {
         renderer.mount(appView, `<article class="page-view error-view">

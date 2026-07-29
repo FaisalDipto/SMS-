@@ -102,3 +102,22 @@ test('rejects invalid records and reports unavailable IndexedDB', async () => {
   await assert.rejects(unavailableStorage.getPage('HOME'), /IndexedDB is unavailable/);
   global.indexedDB = originalIndexedDB;
 });
+
+test('returns recent messages newest first', async () => {
+  const storage = createStorage();
+
+  await storage.saveMessage({
+    requestId: 'OLD1',
+    direction: 'outgoing',
+    rawText: 'REQ|1|OLD1|SHELTER|DHK',
+    createdAt: 1_700_000_000_000
+  });
+  await storage.saveMessage({
+    requestId: 'NEW1',
+    direction: 'incoming',
+    rawText: 'RES|1|NEW1|SHELTER|1/1|DHK|DU:0:FULL',
+    createdAt: 1_700_000_001_000
+  });
+
+  assert.deepEqual((await storage.getRecentMessages(1)).map((message) => message.requestId), ['NEW1']);
+});

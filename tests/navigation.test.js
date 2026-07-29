@@ -47,3 +47,21 @@ test('shows the offline shelter map page', async () => {
   assert.equal(calls.length, 1);
   assert.equal(calls[0][1], 'map:MIRPUR:120:OPEN');
 });
+
+test('shows recent message activity', async () => {
+  const calls = [];
+  const view = {};
+  const instance = navigation.createNavigation({
+    storage: {
+      getRecentMessages: async () => [{ requestId: 'A17K' }]
+    },
+    renderer: {
+      mount: (target, html) => calls.push([target, html]),
+      renderActivityPage: (messages) => `activity:${messages[0].requestId}`
+    }
+  });
+
+  await instance.show('ACTIVITY', view);
+
+  assert.deepEqual(calls, [[view, 'activity:A17K']]);
+});

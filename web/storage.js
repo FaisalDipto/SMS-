@@ -156,6 +156,17 @@
       .then((alerts) => alerts.filter((alert) => alert.expiresAt > now));
   }
 
+  function getRecentMessages(limit = 10) {
+    if (!Number.isInteger(limit) || limit <= 0) {
+      throw storageError('limit must be a positive integer');
+    }
+
+    return runRequest(STORES.MESSAGES, 'readonly', (store) => store.getAll())
+      .then((messages) => messages
+        .sort((left, right) => (right.createdAt || 0) - (left.createdAt || 0))
+        .slice(0, limit));
+  }
+
   function queueRequest(request) {
     requireRecord(request, 'request');
     requireText(request.requestId, 'request.requestId');
@@ -186,6 +197,7 @@
     saveAlert,
     getPage,
     getActiveAlerts,
+    getRecentMessages,
     queueRequest
   };
 });

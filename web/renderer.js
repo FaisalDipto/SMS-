@@ -73,18 +73,18 @@
     return `<span class="freshness freshness-active">Expires ${escapeHtml(formatTimestamp(milliseconds))}</span>`;
   }
 
-  function renderMetadata(record, now) {
+  function renderMetadata(record, now, showFreshness = true) {
     const receivedAt = toMilliseconds(record.receivedAt);
     const receivedLabel = formatTimestamp(record.receivedAt);
     const datetime = receivedAt === null ? '' : new Date(receivedAt).toISOString();
 
     return `<div class="page-meta">
       <span>Last received <time datetime="${escapeHtml(datetime)}">${escapeHtml(receivedLabel)}</time></span>
-      ${renderFreshness(record.expiresAt, now)}
+      ${showFreshness ? renderFreshness(record.expiresAt, now) : ''}
     </div>`;
   }
 
-  function renderPageFrame({ pageClass, title, region, record, now, body }) {
+  function renderPageFrame({ pageClass, title, region, record, now, body, showFreshness = true }) {
     const regionLabel = region && region !== '-' ?
       `<span class="region-label">${escapeHtml(region)}</span>` : '';
 
@@ -94,10 +94,10 @@
           <p class="eyebrow">Local information ${regionLabel}</p>
           <h2>${escapeHtml(title)}</h2>
         </div>
-        ${renderFreshness(record.expiresAt, now)}
+        ${showFreshness ? renderFreshness(record.expiresAt, now) : ''}
       </header>
       ${body}
-      ${renderMetadata(record, now)}
+      ${renderMetadata(record, now, showFreshness)}
     </article>`;
   }
 
@@ -268,7 +268,39 @@
       region: page.region || 'DHK',
       record: page,
       now,
-      body
+      body,
+      showFreshness: false
+    });
+  }
+
+  function renderActivityPage(messages = [], now = Date.now()) {
+    const records = Array.isArray(messages) ? messages : [];
+    const body = records.length === 0
+      ? '<p class="empty-state">No SMS activity has been recorded yet.</p>'
+      : `<ul class="activity-list">
+          ${records.map((message) => {
+            const direction = message.direction === 'outgoing' ? 'Sent request' : 'Received response';
+            const status = String(message.status || 'unknown').toUpperCase();
+            return `<li class="activity-item">
+              <div>
+                <p class="activity-direction">${escapeHtml(direction)}</p>
+                <p class="activity-status">${escapeHtml(status)} · ${escapeHtml(message.requestId || 'unknown ID')}</p>
+                <code>${escapeHtml(message.rawText || '')}</code>
+              </div>
+              <time>${escapeHtml(formatTimestamp(message.createdAt))}</time>
+            </li>`;
+          }).join('')}
+        </ul>`;
+    const latest = records.reduce((latestTime, message) =>
+      Math.max(latestTime, toMilliseconds(message.createdAt) || 0), 0);
+
+    return renderPageFrame({
+      pageClass: 'page-view-activity',
+      title: 'Message activity',
+      record: latest ? { receivedAt: latest } : {},
+      now,
+      body,
+      showFreshness: false
     });
   }
 
@@ -280,6 +312,8 @@
         return renderShelterPage(page, now);
       case 'ALERTS':
         return renderAlertsPage(page.alerts, now);
+      case 'ACTIVITY':
+        return renderActivityPage(page.messages, now);
       default:
         throw new Error(`Unsupported page: ${page.page || page.type}`);
     }
@@ -303,6 +337,7 @@
     renderShelterPage,
     renderAlertsPage,
     renderMapPage,
+    renderActivityPage,
     renderPage,
     mount
   };

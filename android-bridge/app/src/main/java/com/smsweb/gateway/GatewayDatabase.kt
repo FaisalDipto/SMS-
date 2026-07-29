@@ -16,7 +16,12 @@ data class QueueItem(
     val subscriptionId: Int
 )
 
-class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gateway.db", null, 2) {
+data class WebResponse(
+    val id: Long,
+    val text: String
+)
+
+class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gateway.db", null, 3) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE gateway_queue (
@@ -29,6 +34,7 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
                 status TEXT NOT NULL,
                 attempts INTEGER NOT NULL DEFAULT 0,
                 subscription_id INTEGER NOT NULL DEFAULT -1,
+                web_delivered INTEGER NOT NULL DEFAULT 0,
                 created_at INTEGER NOT NULL
             )
         """.trimIndent())
@@ -37,6 +43,9 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 2) {
             db.execSQL("ALTER TABLE gateway_queue ADD COLUMN subscription_id INTEGER NOT NULL DEFAULT -1")
+        }
+        if (oldVersion < 3) {
+            db.execSQL("ALTER TABLE gateway_queue ADD COLUMN web_delivered INTEGER NOT NULL DEFAULT 0")
         }
     }
 
@@ -86,6 +95,33 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
 
     fun markForwarded(id: Long) = updateStatus(id, "FORWARDED")
     fun markSent(id: Long) = updateStatus(id, "SENT")
+
+    fun unreadWebResponses(): List<WebResponse> {
+        val responses = mutableListOf<WebResponse>()
+        readableDatabase.query(
+            "gateway_queue",
+            arrayOf("id", "text"),
+            "direction = ? AND web_delivered = 0",
+            arrayOf("TO_USER"),
+            null,
+            null,
+            "id ASC"
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                responses += WebResponse(cursor.getLong(0), cursor.getString(1))
+            }
+        }
+        return responses
+    }
+
+    fun markWebDeliveredByText(text: String) {
+        writableDatabase.update(
+            "gateway_queue",
+            ContentValues().apply { put("web_delivered", 1) },
+            "direction = ? AND text = ?",
+            arrayOf("TO_USER", text)
+        )
+    }
 
     fun markRetry(id: Long) {
         writableDatabase.execSQL(

@@ -16,7 +16,7 @@ The phone receives `REQ|...` SMS messages, validates their format, queues them, 
 8. Tap **Request alerts** to create and send a `REQ|1|...|ALERT|DHK` SMS.
 9. Confirm the SMSWeb dashboard opens in the app and shows **Connected**.
 
-The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL, checking the local `/health` endpoint, and rendering structured responses received from the Pi while the dashboard is open. SMS request and response delivery continues through the native gateway queue.
+The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL, checking the local `/health` endpoint, and rendering structured responses received from the Pi. Responses are retained in the native queue until the dashboard confirms that they were stored offline, so closing the app does not lose information.
 
 The app uses cleartext HTTP because the Pi endpoint is on the private hotspot network. Do not expose this endpoint directly to the public internet.
 

@@ -4,6 +4,8 @@ import android.content.Context
 import android.telephony.SmsManager
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import org.json.JSONArray
+import org.json.JSONObject
 
 class GatewayWebBridge(
     context: Context,
@@ -30,6 +32,23 @@ class GatewayWebBridge(
     fun saveServiceNumber(value: String): String {
         GatewayConfig.saveServiceNumber(appContext, value)
         return GatewayConfig.serviceNumber(appContext)
+    }
+
+    @JavascriptInterface
+    fun getPendingResponses(): String {
+        val responses = JSONArray()
+        GatewayDatabase(appContext).unreadWebResponses().forEach { response ->
+            responses.put(JSONObject().apply {
+                put("id", response.id)
+                put("text", response.text)
+            })
+        }
+        return responses.toString()
+    }
+
+    @JavascriptInterface
+    fun acknowledgeResponse(text: String) {
+        GatewayDatabase(appContext).markWebDeliveredByText(text)
     }
 
     @Suppress("DEPRECATION")

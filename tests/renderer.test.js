@@ -83,3 +83,18 @@ test('renders bundled shelter coordinates on the offline map', () => {
   assert.match(html, /data-map-location="MIRPUR"/);
   assert.match(html, /Tap a marker to view shelter details/);
 });
+
+test('renders recent SMS activity safely', () => {
+  const html = renderer.renderActivityPage([{
+    requestId: 'A17K',
+    direction: 'incoming',
+    status: 'received',
+    rawText: '<script>alert(1)</script>',
+    createdAt: 1_700_000_000_000
+  }]);
+
+  assert.match(html, /Received response/);
+  assert.ok(html.includes('&lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.doesNotMatch(html, /<script>alert/);
+  assert.doesNotMatch(html, /Expiry not provided/);
+});
