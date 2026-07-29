@@ -23,6 +23,23 @@
         </div>
       </section>
 
+      <section class="gateway-card" aria-labelledby="gateway-title">
+        <div class="gateway-card-header">
+          <div>
+            <p class="eyebrow">Gateway connection</p>
+            <h2 id="gateway-title">Raspberry Pi service</h2>
+          </div>
+          <span id="gateway-connection-badge" class="connection-badge connection-unknown">Not checked</span>
+        </div>
+        <label for="pi-url">Raspberry Pi local URL</label>
+        <input id="pi-url" type="url" inputmode="url" placeholder="http://192.168.43.1:8080" />
+        <div class="gateway-actions">
+          <button id="save-pi-url" type="button">Save URL</button>
+          <button id="check-pi-connection" type="button">Check connection</button>
+          <p id="gateway-status" role="status" aria-live="polite"></p>
+        </div>
+      </section>
+
       <nav id="app-nav" class="app-nav" aria-label="Main navigation">
         <button type="button" data-page="HOME" aria-current="page">Home</button>
         <button type="button" data-page="SHELTER" aria-current="false">Shelters</button>
@@ -53,6 +70,7 @@
     <script src="renderer.js"></script>
     <script src="navigation.js"></script>
     <script src="simulator.js"></script>
+    <script src="gateway.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

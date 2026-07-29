@@ -7,6 +7,15 @@
   }
 
   statusMessage.textContent = 'The local application shell is loaded and ready.';
+
+  window.SMSWeb.gateway.initialize({
+    urlInput: document.querySelector('#pi-url'),
+    saveButton: document.querySelector('#save-pi-url'),
+    checkButton: document.querySelector('#check-pi-connection'),
+    statusElement: document.querySelector('#gateway-status'),
+    badgeElement: document.querySelector('#gateway-connection-badge')
+  });
+
   const navigation = window.SMSWeb.navigation;
   navigation.initialize({
     nav: document.querySelector('#app-nav'),

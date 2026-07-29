@@ -9,10 +9,11 @@ The phone receives `REQ|...` SMS messages, validates their format, queues them, 
 1. Open `android-bridge/` in Android Studio.
 2. Connect an Android phone with an active SIM card.
 3. Grant SMS permissions when the app starts.
-4. Set the Raspberry Pi URL, for example `http://192.168.43.1:8080`.
-5. Confirm the SMSWeb dashboard opens in the app.
+4. In the dashboard, set the Raspberry Pi URL, for example `http://192.168.43.1:8080`, and tap **Save URL**.
+5. Tap **Check connection** while the Go service is running.
+6. Confirm the SMSWeb dashboard opens in the app and shows **Connected**.
 
-The current WebView package includes the offline dashboard shell. Its native request/response bridge will be connected to the Pi service in the next milestone.
+The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL and checking the local `/health` endpoint. SMS request and response delivery continues through the native gateway queue.
 
 The app uses cleartext HTTP because the Pi endpoint is on the private hotspot network. Do not expose this endpoint directly to the public internet.
 

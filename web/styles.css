@@ -65,6 +65,7 @@ h2 {
 }
 
 .status-card,
+.gateway-card,
 .page-view {
   border: 1px solid #d4e5e1;
   border-radius: 1rem;
@@ -124,10 +125,113 @@ h2 {
 }
 
 .status-card p,
+.gateway-card p,
 .page-view p {
   margin-bottom: 0;
   color: #55716d;
   line-height: 1.6;
+}
+
+.gateway-card {
+  margin-bottom: 1rem;
+  padding: 1.1rem 1.25rem;
+}
+
+.gateway-card-header {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.gateway-card-header .eyebrow {
+  margin-bottom: 0.35rem;
+  font-size: 0.7rem;
+}
+
+.gateway-card-header h2 {
+  margin-bottom: 0;
+}
+
+.connection-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.connection-unknown,
+.connection-checking {
+  color: #854d0e;
+  background: #fef3c7;
+}
+
+.connection-online {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.connection-offline {
+  color: #991b1b;
+  background: #fee2e2;
+}
+
+.gateway-card label {
+  display: block;
+  margin-bottom: 0.4rem;
+  color: #17312f;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.gateway-card input {
+  display: block;
+  width: 100%;
+  border: 1px solid #b7d2cd;
+  border-radius: 0.65rem;
+  padding: 0.75rem;
+  color: #17312f;
+  background: #f7fbfa;
+  font: 0.9rem/1.5 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.gateway-card input:focus {
+  outline: 3px solid #bde7df;
+  border-color: #0f766e;
+}
+
+.gateway-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  align-items: center;
+  margin-top: 0.75rem;
+}
+
+.gateway-actions button {
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0.65rem 0.85rem;
+  color: #ffffff;
+  background: #0f766e;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.gateway-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+#gateway-status {
+  flex: 1 1 12rem;
+  margin: 0;
+  color: #55716d;
+  font-size: 0.8rem;
 }
 
 .page-view {

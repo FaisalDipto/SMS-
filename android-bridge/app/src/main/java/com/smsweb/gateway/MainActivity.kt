@@ -21,7 +21,7 @@ class MainActivity : Activity() {
             settings.allowFileAccess = true
             settings.allowContentAccess = true
             webViewClient = WebViewClient()
-            addJavascriptInterface(GatewayWebBridge(), "smsWeb")
+            addJavascriptInterface(GatewayWebBridge(this@MainActivity, this), "smsWeb")
             WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG)
             loadUrl("file:///android_asset/index.html")
         }
