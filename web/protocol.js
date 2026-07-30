@@ -32,6 +32,7 @@
     'ALERTS'
   ]);
   const ALERT_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+  const RESPONSE_TRUST_LEVELS = new Set(['VERIFIED', 'DEMO', 'UNVERIFIED']);
 
   function protocolError(message) {
     return new Error(`Invalid SMS protocol message: ${message}`);
@@ -64,6 +65,21 @@
 
     if (region !== '-' && !/^[A-Z0-9_-]{1,12}$/.test(region)) {
       throw protocolError('region must be a compact uppercase code');
+    }
+  }
+
+  function validateResponseMetadata({ trust, source, verifiedAt, expiresAt }) {
+    if (!RESPONSE_TRUST_LEVELS.has(trust)) {
+      throw protocolError(`unknown response trust level: ${trust}`);
+    }
+    if (typeof source !== 'string' || !/^[A-Z0-9_-]{2,24}$/.test(source)) {
+      throw protocolError('source must contain 2-24 uppercase letters, numbers, underscores, or hyphens');
+    }
+    if (!Number.isInteger(verifiedAt) || verifiedAt <= 0) {
+      throw protocolError('verifiedAt must be a positive Unix timestamp');
+    }
+    if (!Number.isInteger(expiresAt) || expiresAt <= verifiedAt) {
+      throw protocolError('expiresAt must be later than verifiedAt');
     }
   }
 
@@ -146,11 +162,13 @@
   function parseResponse(text) {
     const fields = splitFields(requireText(text, 'message'));
 
-    if (fields.length !== 7 || fields[0] !== 'RES') {
-      throw protocolError('response must contain RES and six fields');
+    if (![7, 11].includes(fields.length) || fields[0] !== 'RES') {
+      throw protocolError('response must use the legacy or metadata response format');
     }
 
-    const [, version, requestId, page, part, region, payload] = fields;
+    const [, version, requestId, page, part, region] = fields;
+    const hasMetadata = fields.length === 11;
+    const payload = fields[fields.length - 1];
     validateVersion(version);
     validateIdentifier(requestId, 'request ID');
 
@@ -162,7 +180,7 @@
     validateRegion(region);
     requireText(payload, 'payload', { allowEmpty: true });
 
-    return {
+    const response = {
       type: 'RES',
       version,
       requestId,
@@ -171,6 +189,15 @@
       region,
       payload
     };
+    if (hasMetadata) {
+      const trust = fields[6];
+      const source = fields[7];
+      const verifiedAt = Number(fields[8]);
+      const expiresAt = Number(fields[9]);
+      validateResponseMetadata({ trust, source, verifiedAt, expiresAt });
+      Object.assign(response, { trust, source, verifiedAt, expiresAt });
+    }
+    return response;
   }
 
   function parseAlert(text) {
@@ -242,15 +269,33 @@
     validateRegion(response.region);
     requireText(response.payload, 'payload', { allowEmpty: true });
 
-    return [
+    const fields = [
       'RES',
       version,
       response.requestId,
       response.page,
       response.part,
-      response.region,
-      response.payload
-    ].map((field, index) => index === 0 ? field : escapeField(field, 'response field')).join('|');
+      response.region
+    ];
+    const metadataFields = [response.trust, response.source, response.verifiedAt, response.expiresAt];
+    const hasMetadata = metadataFields.some((value) => value !== undefined && value !== null);
+    if (hasMetadata) {
+      const metadata = {
+        trust: response.trust,
+        source: response.source,
+        verifiedAt: Number(response.verifiedAt),
+        expiresAt: Number(response.expiresAt)
+      };
+      validateResponseMetadata(metadata);
+      fields.push(
+        metadata.trust,
+        metadata.source,
+        String(metadata.verifiedAt),
+        String(metadata.expiresAt)
+      );
+    }
+    fields.push(response.payload);
+    return fields.map((field, index) => index === 0 ? field : escapeField(field, 'response field')).join('|');
   }
 
   function serializeAlert(alert) {

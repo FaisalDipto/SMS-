@@ -47,6 +47,37 @@ test('marks expired information clearly', () => {
 
   assert.match(html, /Outdated information/);
   assert.match(html, /class="freshness freshness-expired"/);
+  assert.match(html, /expired and cannot be used for routing/);
+});
+
+test('shows source, verification time, and demo trust without claiming authority verification', () => {
+  const now = 1_700_000_000_000;
+  const html = renderer.renderShelterPage({
+    title: 'Shelters',
+    payload: 'MIRPUR:12:OPEN',
+    receivedAt: now,
+    verifiedAt: now - 60_000,
+    expiresAt: now + 60_000,
+    trust: 'DEMO',
+    source: 'SMSWEB_DEMO'
+  }, now);
+
+  assert.match(html, /Demo data/);
+  assert.match(html, /SMSWEB_DEMO/);
+  assert.match(html, /Demonstration records are not authority-verified/);
+  assert.doesNotMatch(html, /trust-verified/);
+});
+
+test('disables routing for shelter information without a current expiry', () => {
+  const html = renderer.renderMapPage({
+    region: 'DHK',
+    payload: 'MIRPUR:23.8069:90.3687:120:OPEN',
+    receivedAt: 1_700_000_000_000,
+    trust: 'UNVERIFIED'
+  }, 1_700_000_000_000);
+
+  assert.match(html, /id="map-route" type="button" disabled/);
+  assert.match(html, /Routing is disabled until current shelter information/);
 });
 
 test('renders alert priority and escaped messages', () => {

@@ -21,12 +21,16 @@ type Message struct {
 }
 
 type Shelter struct {
-	Region    string
-	Location  string
-	Latitude  float64
-	Longitude float64
-	Spaces    int
-	Status    string
+	Region     string
+	Location   string
+	Latitude   float64
+	Longitude  float64
+	Spaces     int
+	Status     string
+	Trust      string
+	Source     string
+	VerifiedAt int64
+	ExpiresAt  int64
 }
 
 type Alert struct {
@@ -72,6 +76,10 @@ CREATE TABLE IF NOT EXISTS shelters (
     longitude REAL NOT NULL DEFAULT 0,
     spaces INTEGER NOT NULL,
     status TEXT NOT NULL,
+    trust TEXT NOT NULL DEFAULT 'DEMO',
+    source TEXT NOT NULL DEFAULT 'SMSWEB_DEMO',
+    verified_at INTEGER NOT NULL DEFAULT 0,
+    expires_at INTEGER NOT NULL DEFAULT 0,
     UNIQUE(region, location)
 );
 
@@ -91,19 +99,31 @@ INSERT OR IGNORE INTO alerts(alert_id, priority, expires_at, region, message) VA
 		return fmt.Errorf("initialize sqlite database: %w", err)
 	}
 
-	// Existing demo databases were created before shelter coordinates existed.
-	// Keep them usable while adding the new geographic fields in place.
-	for _, column := range []string{"latitude", "longitude"} {
-		if err := store.ensureShelterColumn(column); err != nil {
+	// Keep existing demo databases usable as geographic and trust metadata evolve.
+	columns := map[string]string{
+		"latitude":    "REAL NOT NULL DEFAULT 0",
+		"longitude":   "REAL NOT NULL DEFAULT 0",
+		"trust":       "TEXT NOT NULL DEFAULT 'DEMO'",
+		"source":      "TEXT NOT NULL DEFAULT 'SMSWEB_DEMO'",
+		"verified_at": "INTEGER NOT NULL DEFAULT 0",
+		"expires_at":  "INTEGER NOT NULL DEFAULT 0",
+	}
+	for column, definition := range columns {
+		if err := store.ensureShelterColumn(column, definition); err != nil {
 			return err
 		}
 	}
+	verifiedAt := time.Now().UTC().Unix()
+	expiresAt := verifiedAt + int64((6 * time.Hour).Seconds())
 	_, err = store.db.Exec(`
-INSERT OR IGNORE INTO shelters(region, location, latitude, longitude, spaces, status) VALUES
-    ('DHK', 'MIRPUR', 23.8069, 90.3687, 120, 'OPEN'),
-    ('DHK', 'UTTARA', 23.8759, 90.4002, 80, 'OPEN'),
-    ('DHK', 'DU', 23.7271, 90.3944, 0, 'FULL')
-`)
+INSERT OR IGNORE INTO shelters(
+    region, location, latitude, longitude, spaces, status,
+    trust, source, verified_at, expires_at
+) VALUES
+    ('DHK', 'MIRPUR', 23.8069, 90.3687, 120, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'UTTARA', 23.8759, 90.4002, 80, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'DU', 23.7271, 90.3944, 0, 'FULL', 'DEMO', 'SMSWEB_DEMO', ?, ?)
+`, verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt)
 	if err != nil {
 		return fmt.Errorf("seed shelters: %w", err)
 	}
@@ -120,15 +140,24 @@ longitude = CASE location
     WHEN 'DU' THEN 90.3944
     ELSE longitude
 END
-WHERE region = 'DHK' AND (latitude = 0 OR longitude = 0)
-`)
+WHERE region = 'DHK' AND (latitude = 0 OR longitude = 0);
+
+UPDATE shelters
+SET trust = 'DEMO',
+    source = 'SMSWEB_DEMO',
+    verified_at = ?,
+    expires_at = ?
+WHERE region = 'DHK'
+  AND location IN ('MIRPUR', 'UTTARA', 'DU')
+  AND source = 'SMSWEB_DEMO'
+`, verifiedAt, expiresAt)
 	if err != nil {
-		return fmt.Errorf("backfill shelter coordinates: %w", err)
+		return fmt.Errorf("refresh demo shelter metadata: %w", err)
 	}
 	return nil
 }
 
-func (store *Store) ensureShelterColumn(column string) error {
+func (store *Store) ensureShelterColumn(column, definition string) error {
 	rows, err := store.db.Query("PRAGMA table_info(shelters)")
 	if err != nil {
 		return fmt.Errorf("inspect shelter schema: %w", err)
@@ -158,10 +187,14 @@ func (store *Store) ensureShelterColumn(column string) error {
 		return nil
 	}
 
-	if column != "latitude" && column != "longitude" {
+	allowedColumns := map[string]bool{
+		"latitude": true, "longitude": true, "trust": true,
+		"source": true, "verified_at": true, "expires_at": true,
+	}
+	if !allowedColumns[column] {
 		return fmt.Errorf("unsupported shelter column: %s", column)
 	}
-	if _, err := store.db.Exec("ALTER TABLE shelters ADD COLUMN " + column + " REAL NOT NULL DEFAULT 0"); err != nil {
+	if _, err := store.db.Exec("ALTER TABLE shelters ADD COLUMN " + column + " " + definition); err != nil {
 		return fmt.Errorf("add shelter %s: %w", column, err)
 	}
 	return nil
@@ -202,7 +235,8 @@ WHERE id = (SELECT id FROM messages WHERE request_id = ? ORDER BY id DESC LIMIT 
 
 func (store *Store) FindShelters(region string) ([]Shelter, error) {
 	rows, err := store.db.Query(`
-SELECT region, location, latitude, longitude, spaces, status
+SELECT region, location, latitude, longitude, spaces, status,
+       trust, source, verified_at, expires_at
 FROM shelters
 WHERE region = ?
 ORDER BY location
@@ -215,7 +249,18 @@ ORDER BY location
 	var shelters []Shelter
 	for rows.Next() {
 		var shelter Shelter
-		if err := rows.Scan(&shelter.Region, &shelter.Location, &shelter.Latitude, &shelter.Longitude, &shelter.Spaces, &shelter.Status); err != nil {
+		if err := rows.Scan(
+			&shelter.Region,
+			&shelter.Location,
+			&shelter.Latitude,
+			&shelter.Longitude,
+			&shelter.Spaces,
+			&shelter.Status,
+			&shelter.Trust,
+			&shelter.Source,
+			&shelter.VerifiedAt,
+			&shelter.ExpiresAt,
+		); err != nil {
 			return nil, err
 		}
 		shelters = append(shelters, shelter)

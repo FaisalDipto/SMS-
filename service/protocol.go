@@ -26,6 +26,14 @@ var alertPriorities = map[string]bool{
 	"LOW": true, "MEDIUM": true, "HIGH": true, "CRITICAL": true,
 }
 
+var responseTrustLevels = map[string]bool{
+	"VERIFIED":   true,
+	"DEMO":       true,
+	"UNVERIFIED": true,
+}
+
+var sourcePattern = regexp.MustCompile(`^[A-Z0-9_-]{2,24}$`)
+
 type Request struct {
 	Type      string
 	Version   string
@@ -109,7 +117,30 @@ func escapeField(value string) string {
 	return strings.ReplaceAll(value, `|`, `\|`)
 }
 
-func SerializeResponse(requestID, page, region, payload string) (string, error) {
+type ResponseMetadata struct {
+	Trust      string
+	Source     string
+	VerifiedAt int64
+	ExpiresAt  int64
+}
+
+func validateResponseMetadata(metadata ResponseMetadata) error {
+	if !responseTrustLevels[metadata.Trust] {
+		return fmt.Errorf("invalid response trust level")
+	}
+	if !sourcePattern.MatchString(metadata.Source) {
+		return fmt.Errorf("invalid response source")
+	}
+	if metadata.VerifiedAt <= 0 {
+		return fmt.Errorf("response verification time must be positive")
+	}
+	if metadata.ExpiresAt <= metadata.VerifiedAt {
+		return fmt.Errorf("response expiry must be later than verification time")
+	}
+	return nil
+}
+
+func SerializeResponse(requestID, page, region, payload string, metadata ...ResponseMetadata) (string, error) {
 	if !identifierPattern.MatchString(requestID) {
 		return "", fmt.Errorf("invalid request ID")
 	}
@@ -127,8 +158,22 @@ func SerializeResponse(requestID, page, region, payload string) (string, error) 
 		page,
 		"1/1",
 		region,
-		payload,
 	}
+	if len(metadata) > 1 {
+		return "", fmt.Errorf("response accepts at most one metadata record")
+	}
+	if len(metadata) == 1 {
+		if err := validateResponseMetadata(metadata[0]); err != nil {
+			return "", err
+		}
+		fields = append(fields,
+			metadata[0].Trust,
+			metadata[0].Source,
+			strconv.FormatInt(metadata[0].VerifiedAt, 10),
+			strconv.FormatInt(metadata[0].ExpiresAt, 10),
+		)
+	}
+	fields = append(fields, payload)
 	for index := 1; index < len(fields); index++ {
 		fields[index] = escapeField(fields[index])
 	}

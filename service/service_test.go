@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 func newTestServer(t *testing.T) (*Store, http.Handler) {
@@ -62,8 +64,29 @@ func TestIncomingShelterRequest(t *testing.T) {
 	if gateway.Recipient != "+8801712345678" {
 		t.Fatalf("unexpected recipient: %s", gateway.Recipient)
 	}
-	if gateway.Text != "RES|1|A17K|SHELTER|1/1|DHK|DU:23.7271:90.3944:0:FULL;MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN" {
+	if !strings.HasPrefix(gateway.Text, "RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|") {
 		t.Fatalf("unexpected response text: %s", gateway.Text)
+	}
+	if !strings.HasSuffix(gateway.Text, "|DU:23.7271:90.3944:0:FULL;MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN") {
+		t.Fatalf("unexpected shelter payload: %s", gateway.Text)
+	}
+	fields, err := splitFields(gateway.Text)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(fields) != 11 {
+		t.Fatalf("expected metadata response fields, got %d", len(fields))
+	}
+	verifiedAt, err := strconv.ParseInt(fields[8], 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expiresAt, err := strconv.ParseInt(fields[9], 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if expiresAt-verifiedAt != int64((6 * time.Hour).Seconds()) {
+		t.Fatalf("expected six-hour demo expiry window, got %d seconds", expiresAt-verifiedAt)
 	}
 
 	count, err := store.MessageCount()
@@ -137,6 +160,12 @@ CREATE TABLE shelters (
 	}
 	if shelters[1].Latitude != 23.8069 || shelters[1].Longitude != 90.3687 {
 		t.Fatalf("expected migrated Mirpur coordinates, got %.4f, %.4f", shelters[1].Latitude, shelters[1].Longitude)
+	}
+	if shelters[1].Trust != "DEMO" || shelters[1].Source != "SMSWEB_DEMO" {
+		t.Fatalf("expected migrated demo metadata, got %s from %s", shelters[1].Trust, shelters[1].Source)
+	}
+	if shelters[1].VerifiedAt <= 0 || shelters[1].ExpiresAt <= shelters[1].VerifiedAt {
+		t.Fatalf("expected current migration timestamps, got %d to %d", shelters[1].VerifiedAt, shelters[1].ExpiresAt)
 	}
 }
 

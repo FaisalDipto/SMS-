@@ -73,6 +73,42 @@
     return `<span class="freshness freshness-active">Expires ${escapeHtml(formatTimestamp(milliseconds))}</span>`;
   }
 
+  function renderTrust(record, now = Date.now()) {
+    const trust = String(record.trust || 'UNVERIFIED').toUpperCase();
+    const trustLabels = {
+      VERIFIED: 'Verified source',
+      DEMO: 'Demo data',
+      UNVERIFIED: 'Unverified'
+    };
+    const normalizedTrust = trustLabels[trust] ? trust : 'UNVERIFIED';
+    const source = record.source || 'Unknown source';
+    const verifiedAt = toMilliseconds(record.verifiedAt);
+    const expiresAt = toMilliseconds(record.expiresAt);
+    const isExpired = expiresAt !== null && expiresAt <= now;
+    const warning = normalizedTrust === 'VERIFIED'
+      ? 'Source identity is recorded. Check the timestamp before acting.'
+      : normalizedTrust === 'DEMO'
+        ? 'Demonstration records are not authority-verified emergency information.'
+        : 'The origin of this information has not been verified.';
+    const freshnessWarning = expiresAt === null
+      ? 'Expiry is missing, so this information cannot be used for routing.'
+      : isExpired
+        ? 'This information has expired and cannot be used for routing.'
+        : '';
+
+    return `<section class="trust-panel trust-${normalizedTrust.toLowerCase()}" aria-label="Information trust and source">
+      <div class="trust-heading">
+        <span class="trust-badge">${escapeHtml(trustLabels[normalizedTrust])}</span>
+        <strong>${escapeHtml(source)}</strong>
+      </div>
+      <p>${verifiedAt === null
+        ? 'Verification time not provided.'
+        : `Checked ${escapeHtml(formatTimestamp(verifiedAt))}.`}</p>
+      <p>${escapeHtml(warning)}</p>
+      ${freshnessWarning ? `<p class="trust-warning">${escapeHtml(freshnessWarning)}</p>` : ''}
+    </section>`;
+  }
+
   function renderMetadata(record, now, showFreshness = true) {
     const receivedAt = toMilliseconds(record.receivedAt);
     const receivedLabel = formatTimestamp(record.receivedAt);
@@ -84,7 +120,16 @@
     </div>`;
   }
 
-  function renderPageFrame({ pageClass, title, region, record, now, body, showFreshness = true }) {
+  function renderPageFrame({
+    pageClass,
+    title,
+    region,
+    record,
+    now,
+    body,
+    showFreshness = true,
+    showTrust = false
+  }) {
     const regionLabel = region && region !== '-' ?
       `<span class="region-label">${escapeHtml(region)}</span>` : '';
 
@@ -96,6 +141,7 @@
         </div>
         ${showFreshness ? renderFreshness(record.expiresAt, now) : ''}
       </header>
+      ${showTrust ? renderTrust(record, now) : ''}
       ${body}
       ${renderMetadata(record, now, showFreshness)}
     </article>`;
@@ -192,7 +238,8 @@
       region: page.region,
       record: page,
       now,
-      body
+      body,
+      showTrust: true
     });
   }
 
@@ -270,6 +317,8 @@
     const unknownLocations = shelters.filter((shelter) =>
       shelter.latitude === undefined && !SHELTER_COORDINATES[shelter.location]
     );
+    const expiresAt = toMilliseconds(page.expiresAt);
+    const canRoute = expiresAt !== null && expiresAt > now;
     const body = `<div class="map-placeholder map-data-view" aria-label="Offline greater Dhaka shelter map">
       <div id="offline-vector-map" class="offline-vector-map" role="application" aria-label="Interactive offline greater Dhaka map"></div>
       <div id="map-legacy-layer" class="map-legacy-layer">
@@ -314,8 +363,10 @@
         <button id="map-locate" type="button">Use my location</button>
         <p id="map-location-status" class="map-note">Allow location access to calculate straight-line distances.</p>
         <ul id="map-distance-list" class="map-distance-list" aria-live="polite"></ul>
-        <button id="map-route" type="button">Find route to nearest open shelter</button>
-        <p id="map-route-status" class="map-note">Mirpur road coverage is bundled for route preview.</p>
+        <button id="map-route" type="button"${canRoute ? '' : ' disabled'}>Find route to nearest open shelter</button>
+        <p id="map-route-status" class="map-note">${canRoute
+          ? 'Mirpur road coverage is bundled for route preview.'
+          : 'Routing is disabled until current shelter information with an expiry time is received.'}</p>
         <p id="map-route-location" class="map-note"></p>
         <ul id="map-route-roads" class="map-route-roads" aria-live="polite"></ul>
         <p class="map-attribution">Road data: &copy; OpenStreetMap contributors</p>
@@ -333,7 +384,7 @@
       record: page,
       now,
       body,
-      showFreshness: false
+      showTrust: true
     });
   }
 
@@ -396,6 +447,8 @@
   return {
     escapeHtml,
     formatTimestamp,
+    renderFreshness,
+    renderTrust,
     parseShelterPayload,
     renderHomePage,
     renderShelterPage,

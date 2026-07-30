@@ -34,7 +34,7 @@ REQ|1|A17K|SHELTER|DHK
 The crisis information service replies:
 
 ```text
-RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:120:OPEN;UTTARA:80:OPEN;DU:0:FULL
+RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:120:OPEN;UTTARA:80:OPEN;DU:0:FULL
 ```
 
 The Android bridge receives the SMS and passes it to the local web application. The web application renders:
@@ -244,14 +244,22 @@ Available commands for the first version:
 ### 5.2 Response format
 
 ```text
-RES|VERSION|REQUEST_ID|PAGE|PART/TOTAL|REGION|PAYLOAD
+RES|VERSION|REQUEST_ID|PAGE|PART/TOTAL|REGION|TRUST|SOURCE|VERIFIED_AT|EXPIRES_AT|PAYLOAD
 ```
 
 Example:
 
 ```text
-RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:120:OPEN;UTTARA:80:OPEN;DU:0:FULL
+RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:120:OPEN;UTTARA:80:OPEN;DU:0:FULL
 ```
+
+`TRUST` is `VERIFIED`, `DEMO`, or `UNVERIFIED`. `SOURCE` is the compact
+identifier of the organization or dataset responsible for the information.
+`VERIFIED_AT` and `EXPIRES_AT` are Unix timestamps in seconds, and expiry must
+be later than verification. `DEMO` records must never be presented as
+authority-verified. The client can still display the older seven-field response
+format, but treats it as unverified and does not enable routing without a
+current expiry.
 
 ### 5.3 Alert format
 
@@ -495,7 +503,7 @@ Paste SMS response here
 Test with:
 
 ```text
-RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:120:OPEN;UTTARA:80:OPEN;DU:0:FULL
+RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:120:OPEN;UTTARA:80:OPEN;DU:0:FULL
 ```
 
 This allows the entire web application to be developed without a SIM card, SMS provider, or additional hardware.
@@ -526,7 +534,7 @@ Example response returned to the Android gateway:
 ```json
 {
   "recipient": "+8801XXXXXXXXX",
-  "text": "RES|1|A17K|SHELTER|DHK|Mirpur Shelter|23.8069|90.3687|120|OPEN"
+  "text": "RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:23.8069:90.3687:120:OPEN"
 }
 ```
 
@@ -591,8 +599,8 @@ The Android layer uses the device's SMS service to send it.
 If a response is longer than one SMS, split it into parts:
 
 ```text
-RES|1|A17K|SHELTER|1/2|DHK|MIRPUR:120:OPEN;UTTARA:80:OPEN
-RES|1|A17K|SHELTER|2/2|DHK|DU:0:FULL;GULSHAN:40:OPEN
+RES|1|A17K|SHELTER|1/2|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:120:OPEN;UTTARA:80:OPEN
+RES|1|A17K|SHELTER|2/2|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|DU:0:FULL;GULSHAN:40:OPEN
 ```
 
 The PWA should:
@@ -788,10 +796,17 @@ depend on a CDN or live tile server.
 Example SMS response:
 
 ```text
-RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN;DU:23.7271:90.3944:0:FULL
+RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN;DU:23.7271:90.3944:0:FULL
 ```
 
-The parser validates the latitude, longitude, status, timestamp, and expiry. A valid record is stored in IndexedDB and rendered as a marker on the local map. The marker and basemap require no internet request. The current demo seed coordinates identify named areas, not verified shelter entrances; they must be replaced with authoritative shelter coordinates before emergency navigation is enabled.
+The parser validates trust, source, verification time, expiry, latitude,
+longitude, and shelter status. A valid record is stored in IndexedDB and
+rendered as a marker on the local map. Missing or expired freshness metadata
+keeps the record visible with a warning but disables route calculation. The
+marker and basemap require no internet request. The current `SMSWEB_DEMO`
+records identify named areas, not verified shelter entrances; they are labelled
+as demo data and must be replaced with authoritative shelter records before
+emergency navigation is enabled.
 
 The dashboard can request the phone's location and calculate great-circle (straight-line) distances to coordinate-bearing shelters. These distances are not road travel distances and must not be presented as an emergency route.
 
@@ -826,16 +841,20 @@ Showing a marker is different from calculating a route. The current route previe
 Use decimal coordinates instead of sending a full GeoJSON object:
 
 ```text
-RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN
+RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:23.8069:90.3687:120:OPEN
 ```
 
 For multiple locations:
 
 ```text
-RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN
+RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN
 ```
 
-Use full status values in the current implementation: `OPEN`, `FULL`, `CLOSED`, and `UNKNOWN`. Include a timestamp, source, or confidence score when message size allows it.
+Use full status values in the current implementation: `OPEN`, `FULL`,
+`CLOSED`, and `UNKNOWN`. Source, trust, verification time, and expiry are
+mandatory in newly generated shelter responses. The Go service refreshes only
+its clearly labelled demo seed records when it starts; production records must
+receive their timestamps from the responsible authority's update workflow.
 
 ## 15. Advanced Feature Roadmap
 

@@ -141,7 +141,17 @@ func (server *Server) createResponse(request Request) (string, error) {
 				shelter.Status,
 			))
 		}
-		return SerializeResponse(request.RequestID, "SHELTER", region, strings.Join(records, ";"))
+		metadata, err := shelterResponseMetadata(shelters)
+		if err != nil {
+			return "", err
+		}
+		return SerializeResponse(
+			request.RequestID,
+			"SHELTER",
+			region,
+			strings.Join(records, ";"),
+			metadata,
+		)
 	case "HOME":
 		return SerializeResponse(request.RequestID, "HOME", "-", "SMSWeb crisis service")
 	case "HELP":
@@ -163,6 +173,37 @@ func (server *Server) createResponse(request Request) (string, error) {
 	default:
 		return SerializeError(request.RequestID, "NOT_IMPLEMENTED", fmt.Sprintf("command %s is not implemented", request.Command)), nil
 	}
+}
+
+func shelterResponseMetadata(shelters []Shelter) (ResponseMetadata, error) {
+	if len(shelters) == 0 {
+		return ResponseMetadata{}, errors.New("no shelter records are available")
+	}
+
+	metadata := ResponseMetadata{
+		Trust:      shelters[0].Trust,
+		Source:     shelters[0].Source,
+		VerifiedAt: shelters[0].VerifiedAt,
+		ExpiresAt:  shelters[0].ExpiresAt,
+	}
+	for _, shelter := range shelters[1:] {
+		if shelter.Source != metadata.Source {
+			metadata.Source = "MULTIPLE"
+		}
+		if shelter.Trust != metadata.Trust {
+			metadata.Trust = "UNVERIFIED"
+		}
+		if shelter.VerifiedAt < metadata.VerifiedAt {
+			metadata.VerifiedAt = shelter.VerifiedAt
+		}
+		if shelter.ExpiresAt < metadata.ExpiresAt {
+			metadata.ExpiresAt = shelter.ExpiresAt
+		}
+	}
+	if err := validateResponseMetadata(metadata); err != nil {
+		return ResponseMetadata{}, fmt.Errorf("invalid shelter metadata: %w", err)
+	}
+	return metadata, nil
 }
 
 func decodeJSON(request *http.Request, destination any) error {

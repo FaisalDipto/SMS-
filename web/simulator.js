@@ -51,7 +51,11 @@
           payload: response.payload,
           content: response.payload,
           receivedAt: now,
-          source
+          source: response.source || source,
+          transportSource: source,
+          trust: response.trust || 'UNVERIFIED',
+          verifiedAt: response.verifiedAt ? response.verifiedAt * 1_000 : undefined,
+          expiresAt: response.expiresAt ? response.expiresAt * 1_000 : undefined
         };
 
         await storage.savePage(page);

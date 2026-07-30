@@ -17,7 +17,11 @@ function createDependencies() {
           page: 'SHELTER',
           part: '1/1',
           region: 'DHK',
-          payload: rawText.split('|').slice(6).join('|')
+          payload: rawText.split('|').slice(-1)[0],
+          trust: 'DEMO',
+          source: 'SMSWEB_DEMO',
+          verifiedAt: 1_700_000_000,
+          expiresAt: 1_700_003_600
         }),
         parseAlert: () => {
           throw new Error('not used in this test');
@@ -53,6 +57,10 @@ test('parses, stores, and renders a shelter response', async () => {
   assert.equal(calls[0][0], 'message');
   assert.equal(calls[1][0], 'page');
   assert.equal(calls[1][1].pageId, 'SHELTER:DHK');
+  assert.equal(calls[1][1].trust, 'DEMO');
+  assert.equal(calls[1][1].source, 'SMSWEB_DEMO');
+  assert.equal(calls[1][1].verifiedAt, 1_700_000_000_000);
+  assert.equal(calls[1][1].expiresAt, 1_700_003_600_000);
   assert.deepEqual(calls[2], ['mount', appView, '<article>MIRPUR:120:OPEN</article>']);
 });
 

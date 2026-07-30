@@ -285,6 +285,72 @@ h2 {
   background: #fef9c3;
 }
 
+.trust-panel {
+  display: grid;
+  gap: 0.4rem;
+  margin: 0 0 1.25rem;
+  border: 1px solid #d4e5e1;
+  border-left-width: 0.4rem;
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: #f7fbfa;
+}
+
+.trust-panel p {
+  margin: 0;
+  color: #49645f;
+  font-size: 0.82rem;
+}
+
+.trust-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  align-items: center;
+}
+
+.trust-badge {
+  border-radius: 999px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+}
+
+.trust-verified {
+  border-left-color: #15803d;
+}
+
+.trust-verified .trust-badge {
+  color: #166534;
+  background: #dcfce7;
+}
+
+.trust-demo {
+  border-left-color: #d97706;
+}
+
+.trust-demo .trust-badge {
+  color: #854d0e;
+  background: #fef3c7;
+}
+
+.trust-unverified {
+  border-left-color: #dc2626;
+}
+
+.trust-unverified .trust-badge,
+.trust-panel .trust-warning {
+  color: #991b1b;
+}
+
+.trust-unverified .trust-badge {
+  background: #fee2e2;
+}
+
+.trust-panel .trust-warning {
+  font-weight: 800;
+}
+
 .page-summary {
   margin-bottom: 1.25rem;
 }
