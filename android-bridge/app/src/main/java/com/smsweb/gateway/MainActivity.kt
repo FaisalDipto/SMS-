@@ -128,10 +128,16 @@ class MainActivity : Activity() {
         }
 
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-            requestPermissions(
-                arrayOf(Manifest.permission.RECEIVE_SMS, Manifest.permission.READ_SMS, Manifest.permission.SEND_SMS),
-                100
+            val permissions = mutableListOf(
+                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.READ_SMS,
+                Manifest.permission.SEND_SMS
             )
+            if (GatewayConfig.appRole(this) == GatewayConfig.ROLE_GATEWAY) {
+                permissions.add(Manifest.permission.READ_PHONE_STATE)
+                permissions.add(Manifest.permission.READ_CALL_LOG)
+            }
+            requestPermissions(permissions.toTypedArray(), 100)
         }
     }
 

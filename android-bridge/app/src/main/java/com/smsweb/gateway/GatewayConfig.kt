@@ -8,7 +8,9 @@ object GatewayConfig {
     private const val SERVICE_NUMBER = "service_number"
     private const val TRUSTED_SENDERS = "trusted_senders"
     private const val AUTHENTICATION_KEY = "authentication_key"
+    private const val MISSED_CALL_REGION = "missed_call_region"
     const val DEFAULT_PI_URL = "http://192.168.43.1:8080"
+    const val DEFAULT_MISSED_CALL_REGION = "DHK"
     const val ROLE_GATEWAY = "GATEWAY"
     const val ROLE_USER = "USER"
 
@@ -70,6 +72,21 @@ object GatewayConfig {
             .putString(AUTHENTICATION_KEY, normalized)
             .apply()
         return true
+    }
+
+    fun missedCallRegion(context: Context): String = context
+        .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        .getString(MISSED_CALL_REGION, DEFAULT_MISSED_CALL_REGION)
+        .orEmpty()
+        .trim()
+        .ifEmpty { DEFAULT_MISSED_CALL_REGION }
+
+    fun saveMissedCallRegion(context: Context, value: String) {
+        if (isUserEdition()) return
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(MISSED_CALL_REGION, value.trim().uppercase())
+            .apply()
     }
 
     fun isSenderAllowed(context: Context, sender: String): Boolean {
