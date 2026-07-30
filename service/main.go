@@ -238,7 +238,14 @@ func (server *Server) createResponses(request Request) ([]string, error) {
 			return []string{SerializeError(request.RequestID, "NO_ALERTS", "No active alerts are available")}, nil
 		}
 		alert := alerts[0]
-		response, err := SerializeAlert(alert.AlertID, alert.Priority, alert.Expires, alert.Region, alert.Message)
+		response, err := SerializeAlert(
+			request.RequestID,
+			alert.AlertID,
+			alert.Priority,
+			alert.Expires,
+			alert.Region,
+			alert.Message,
+		)
 		return []string{response}, err
 	case "HAZARD":
 		region, err := parseShelterRegion(request.Arguments)

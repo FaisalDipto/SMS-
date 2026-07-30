@@ -216,12 +216,22 @@
   function parseAlert(text) {
     const fields = splitFields(requireText(text, 'message'));
 
-    if (![7, 8].includes(fields.length) || fields[0] !== 'ALT') {
-      throw protocolError('alert must contain ALT and six fields');
+    if (![7, 8, 9].includes(fields.length) || fields[0] !== 'ALT') {
+      throw protocolError('alert must contain a supported ALT response');
     }
 
-    const [, version, alertId, priority, expires, region, message, signature] = fields;
+    const correlated = fields.length === 9 ||
+      (fields.length === 8 && !ALERT_PRIORITIES.has(fields[3]));
+    const version = fields[1];
+    const requestId = correlated ? fields[2] : undefined;
+    const alertId = fields[correlated ? 3 : 2];
+    const priority = fields[correlated ? 4 : 3];
+    const expires = fields[correlated ? 5 : 4];
+    const region = fields[correlated ? 6 : 5];
+    const message = fields[correlated ? 7 : 6];
+    const signature = fields[correlated ? 8 : 7];
     validateVersion(version);
+    if (requestId) validateIdentifier(requestId, 'request ID');
     validateIdentifier(alertId, 'alert ID');
 
     if (!ALERT_PRIORITIES.has(priority)) {
@@ -245,6 +255,7 @@
       region,
       message
     };
+    if (requestId) alert.requestId = requestId;
     if (signature) alert.signature = signature;
     return alert;
   }
@@ -337,13 +348,19 @@
 
     const fields = [
       'ALT',
-      version,
+      version
+    ];
+    if (alert.requestId !== undefined) {
+      validateIdentifier(alert.requestId, 'request ID');
+      fields.push(alert.requestId);
+    }
+    fields.push(
       alert.alertId,
       alert.priority,
       String(alert.expires),
       alert.region,
       alert.message
-    ];
+    );
     if (alert.signature !== undefined) {
       validateSignature(alert.signature);
       fields.push(alert.signature);

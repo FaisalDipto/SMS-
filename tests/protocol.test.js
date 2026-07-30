@@ -118,8 +118,9 @@ test('parses and serializes authenticated response and alert tags', () => {
   assert.equal(response.payload, 'MIRPUR:120:OPEN');
   assert.equal(protocol.serializeResponse(response), responseText);
 
-  const alertText = `ALT|1|F22P|HIGH|1785384000|DHK|Avoid Mirpur bridge|${signature}`;
+  const alertText = `ALT|1|A17K|F22P|HIGH|1785384000|DHK|Avoid Mirpur bridge|${signature}`;
   const alert = protocol.parseAlert(alertText);
+  assert.equal(alert.requestId, 'A17K');
   assert.equal(alert.signature, signature);
   assert.equal(protocol.serializeAlert(alert), alertText);
 });
@@ -136,6 +137,16 @@ test('parses alerts and converts expiry to a number', () => {
     region: 'DHK',
     message: 'Avoid road near Mirpur bridge'
   });
+});
+
+test('keeps parsing legacy alerts without request correlation', () => {
+  const alert = protocol.parseAlert(
+    'ALT|1|F22P|HIGH|1764000000|DHK|Avoid road near Mirpur bridge'
+  );
+
+  assert.equal(alert.requestId, undefined);
+  assert.equal(alert.alertId, 'F22P');
+  assert.equal(alert.priority, 'HIGH');
 });
 
 test('rejects unsupported commands, pages, versions, and invalid parts', () => {

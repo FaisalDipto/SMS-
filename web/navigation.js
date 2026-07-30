@@ -47,9 +47,18 @@
       callback.error({ code: 2, message: String(message || 'Current location is unavailable.') });
     }
 
-    function requestDeviceLocation(success, error) {
+    function receiveNativeLocationProgress(message, latitude, longitude, accuracy) {
+      pendingNativeLocation?.progress?.(String(message || 'Searching for location…'));
+      const hasAcceptedFix = [latitude, longitude, accuracy]
+        .every((value) => value !== undefined && value !== null && Number.isFinite(Number(value)));
+      if (hasAcceptedFix) {
+        receiveNativeLocation(latitude, longitude, accuracy);
+      }
+    }
+
+    function requestDeviceLocation(success, error, progress) {
       if (nativeBridge && typeof nativeBridge.requestCurrentLocation === 'function') {
-        pendingNativeLocation = { success, error };
+        pendingNativeLocation = { success, error, progress };
         try {
           nativeBridge.requestCurrentLocation();
         } catch (bridgeError) {
@@ -82,8 +91,10 @@
       const distanceList = appView.querySelector('#map-distance-list');
       const routeButton = appView.querySelector('#map-route');
       const routeStatus = appView.querySelector('#map-route-status');
+      const routeResult = appView.querySelector('#map-route-result');
       const routeLocation = appView.querySelector('#map-route-location');
       const routeRoads = appView.querySelector('#map-route-roads');
+      const routeBanner = appView.querySelector('#map-route-banner');
       const detailedMapContainer = appView.querySelector('#offline-vector-map');
       const legacyMap = appView.querySelector('#map-legacy-layer');
       const mapDataNote = appView.querySelector('#map-data-note');
@@ -95,6 +106,10 @@
       const fullMapBounds = { minLatitude: 23.70, maxLatitude: 23.90, minLongitude: 90.34, maxLongitude: 90.43 };
       let mapBounds = { ...fullMapBounds };
       let lastOrigin = demoLocation;
+      let lastAccuracy = null;
+      let reachableRoutes = [];
+      let routeCalculationId = 0;
+      const routeAllowed = routeButton?.dataset.routeAllowed === 'true';
       const shelterRecords = [...map.querySelectorAll('[data-map-location][data-map-latitude][data-map-longitude]')]
         .map((marker) => ({
           location: marker.dataset.mapLocation,
@@ -329,11 +344,13 @@
         routeLine.setAttribute('display', visible ? 'inline' : 'none');
         routeLine.classList.toggle('is-visible', visible);
 
-        if (userLocation) {
+        if (userLocation && visible) {
           const [cx, cy] = project(route.coordinates[0]).split(',');
           userLocation.setAttribute('cx', cx);
           userLocation.setAttribute('cy', cy);
-          userLocation.classList.toggle('is-visible', visible);
+          userLocation.classList.add('is-visible');
+        } else {
+          userLocation?.classList.remove('is-visible');
         }
       }
 
@@ -378,39 +395,192 @@
           });
       }
 
-      function applyLocation(position, demonstration = false) {
+      function setButtonState(button, label, { busy = false, disabled = false } = {}) {
+        if (!button) return;
+        const labelElement = button.querySelector('.button-label');
+        if (labelElement) labelElement.textContent = label;
+        button.disabled = disabled;
+        button.setAttribute('aria-busy', String(busy));
+        button.classList.toggle('is-busy', busy);
+      }
+
+      function setRouteState(state, message) {
+        if (routeResult) routeResult.dataset.state = state;
+        if (routeStatus) routeStatus.textContent = message;
+      }
+
+      function setMapBanner(message, state = 'info') {
+        if (!routeBanner) return;
+        routeBanner.textContent = message;
+        routeBanner.dataset.state = state;
+        routeBanner.hidden = !message;
+      }
+
+      function clearRoutePresentation() {
+        routeCalculationId += 1;
+        reachableRoutes = [];
+        routeRoads?.replaceChildren();
+        if (routeLocation) routeLocation.textContent = '';
+        drawRoute({ coordinates: [] });
+        void detailedMap?.clearRoute?.();
+        map.classList.remove('is-route-focused');
+      }
+
+      function openShelters() {
+        return shelterRecords
+          .filter((record) => record.status === 'OPEN' && record.spaces > 0)
+          .map((record) => ({
+            ...record,
+            coordinate: record.coordinates
+          }));
+      }
+
+      function yieldForStatusPaint() {
+        return new Promise((resolve) => setTimeout(resolve, 0));
+      }
+
+      async function calculateReachableRoutes() {
+        const calculationId = ++routeCalculationId;
+        reachableRoutes = [];
+        distanceList?.replaceChildren();
+        setButtonState(routeButton, 'Calculating road paths…', {
+          busy: true,
+          disabled: true
+        });
+        setRouteState('loading', 'Comparing open shelters using actual mapped road paths…');
+        setMapBanner('Calculating road routes…', 'loading');
+        await yieldForStatusPaint();
+
+        if (!lastOrigin || !routing?.fastestReachableDestinations || !routeGraph) {
+          setButtonState(routeButton, 'Show fastest safe route', { disabled: true });
+          setRouteState('error', 'Offline road routing is unavailable for this area.');
+          setMapBanner('Road routing unavailable', 'error');
+          return [];
+        }
+
+        const availableShelters = openShelters();
+        if (availableShelters.length === 0) {
+          const waitingForUpdate = shelterRecords.length === 0;
+          setButtonState(
+            routeButton,
+            waitingForUpdate ? 'Waiting for shelter update' : 'No open shelters available',
+            { disabled: true }
+          );
+          if (locationStatus) {
+            const accuracyMessage = Number.isFinite(lastAccuracy)
+              ? ` Location accuracy: ±${Math.round(lastAccuracy)} m.`
+              : '';
+            locationStatus.textContent = waitingForUpdate
+              ? `Your location is ready.${accuracyMessage} Request current shelters to enable routing.`
+              : `Your location is ready.${accuracyMessage} No shelter with available spaces was reported.`;
+          }
+          setRouteState(
+            'info',
+            waitingForUpdate
+              ? 'Location ready. Routing will unlock after an authenticated shelter SMS arrives.'
+              : 'No open shelter with available spaces is currently reported.'
+          );
+          setMapBanner(
+            waitingForUpdate ? 'Location ready · waiting for shelters' : 'No open shelters reported',
+            'info'
+          );
+          return [];
+        }
+
+        try {
+          const blockedEdges = routing.blockedEdgesForHazards(
+            routeGraph,
+            hazardRecords,
+            Date.now()
+          );
+          const candidates = routing.fastestReachableDestinations(
+            routeGraph,
+            lastOrigin,
+            openShelters(),
+            {
+              blockedEdges,
+              maxSnapDistanceMeters: 500
+            }
+          );
+          if (calculationId !== routeCalculationId) return [];
+          reachableRoutes = candidates;
+
+          distanceList?.replaceChildren(...candidates.slice(0, 5).map((candidate, index) => {
+            const item = document.createElement('li');
+            item.innerHTML = `<strong>${index === 0 ? 'Fastest · ' : ''}${renderer.escapeHtml(candidate.destination.location)}</strong>
+              <span>${renderer.escapeHtml(geo.formatDistance(candidate.route.distanceMeters / 1000))} by mapped roads · ${renderer.escapeHtml(candidate.destination.spaces)} spaces</span>`;
+            return item;
+          }));
+
+          const unavailableCount = Math.max(0, openShelters().length - candidates.length);
+          if (locationStatus) {
+            const accuracyMessage = Number.isFinite(lastAccuracy)
+              ? ` Location accuracy: ±${Math.round(lastAccuracy)} m.`
+              : '';
+            locationStatus.textContent = candidates.length > 0
+              ? `${candidates.length} open shelter${candidates.length === 1 ? '' : 's'} reachable in the installed road area.${accuracyMessage}${unavailableCount > 0 ? ` ${unavailableCount} outside offline routing coverage.` : ''}`
+              : 'Location found, but no open shelter is reachable within the installed offline road area.';
+          }
+
+          if (candidates.length === 0) {
+            setButtonState(routeButton, 'No reachable route', { disabled: true });
+            setRouteState('error', 'No road path connects your location to an open shelter in the installed routing area.');
+            setMapBanner('No reachable shelter in road coverage', 'error');
+            return [];
+          }
+
+          setButtonState(routeButton, 'Show fastest safe route', {
+            disabled: !routeAllowed
+          });
+          setRouteState(
+            routeAllowed ? 'ready' : 'error',
+            routeAllowed
+              ? `${candidates[0].destination.location} is fastest by road at ${geo.formatDistance(candidates[0].route.distanceMeters / 1000)}. Tap the route button to draw the path.`
+              : 'A road path was found, but routing requires current authenticated shelter information.'
+          );
+          setMapBanner(
+            `${candidates[0].destination.location} · ${geo.formatDistance(candidates[0].route.distanceMeters / 1000)} by road`,
+            routeAllowed ? 'ready' : 'error'
+          );
+          return candidates;
+        } catch (error) {
+          if (calculationId !== routeCalculationId) return [];
+          setButtonState(routeButton, 'Route unavailable', { disabled: true });
+          setRouteState('error', error.message || 'Road paths could not be calculated.');
+          setMapBanner('Could not calculate road routes', 'error');
+          return [];
+        }
+      }
+
+      async function applyLocation(position, demonstration = false) {
         lastOrigin = {
           latitude: Number(position.coords.latitude),
           longitude: Number(position.coords.longitude)
         };
-        const distances = [...map.querySelectorAll(
-          '[data-map-location][data-map-latitude][data-map-longitude]'
-        )].map((marker) => ({
-          location: marker.dataset.mapLocation,
-          spaces: marker.dataset.mapSpaces,
-          status: marker.dataset.mapStatus,
-          distance: geo.distanceKm(lastOrigin, {
-            latitude: Number(marker.dataset.mapLatitude),
-            longitude: Number(marker.dataset.mapLongitude)
-          })
-        })).sort((first, second) => first.distance - second.distance);
-
-        distanceList?.replaceChildren(...distances.map((record) => {
-          const item = document.createElement('li');
-          item.textContent = `${record.location}: ${geo.formatDistance(record.distance)} straight-line, ${record.spaces} spaces, ${record.status}.`;
-          return item;
-        }));
+        lastAccuracy = Number.isFinite(Number(position.coords.accuracy))
+          ? Number(position.coords.accuracy)
+          : null;
+        clearRoutePresentation();
         if (locationStatus) {
           locationStatus.textContent = demonstration
-            ? 'Judge demo location near Mirpur is active. Distances are straight-line estimates.'
-            : 'Distances are straight-line estimates, not road travel distances.';
+            ? 'Judge demo location loaded. Calculating road paths…'
+            : 'Location found. Calculating road paths…';
         }
-        void detailedMap?.setUserLocation(lastOrigin);
-        if (locateButton) locateButton.disabled = false;
+        setMapBanner(demonstration ? 'Demo location ready' : 'Your location is ready', 'ready');
+        if (detailedMap) {
+          void detailedMap.setUserLocation(lastOrigin).catch((error) => {
+            if (locationStatus) {
+              locationStatus.textContent =
+                `Location found, but the map marker could not be updated: ${error.message}`;
+            }
+          });
+        }
+        await calculateReachableRoutes();
+        setButtonState(locateButton, 'Update my location');
       }
 
       if (demoLocation && geo) {
-        applyLocation({
+        void applyLocation({
           coords: {
             latitude: demoLocation.latitude,
             longitude: demoLocation.longitude
@@ -425,49 +595,56 @@
             return;
           }
 
-          locateButton.disabled = true;
+          setButtonState(locateButton, 'Finding location…', {
+            busy: true,
+            disabled: true
+          });
+          setButtonState(routeButton, 'Waiting for location', { disabled: true });
           locationStatus.textContent = 'Requesting your current location...';
+          setMapBanner('Finding your location…', 'loading');
           requestDeviceLocation((position) => {
             demoLocation = null;
-            applyLocation(position);
+            void applyLocation(position);
           }, (error) => {
             locationStatus.textContent = error.code === 1
-              ? 'Location permission was denied.'
+              ? 'Location permission was denied. Allow precise location in Android settings, then try again.'
               : error.message || 'Your current location could not be determined.';
-            locateButton.disabled = false;
+            setButtonState(locateButton, 'Try location again');
+            setButtonState(routeButton, 'Show fastest safe route', { disabled: true });
+            setMapBanner('Location unavailable', 'error');
+          }, (message) => {
+            locationStatus.textContent = message;
+            setMapBanner('Searching GPS satellites…', 'loading');
           });
         });
       }
 
       if (routeButton && routeStatus) {
-        routeButton.addEventListener('click', () => {
+        routeButton.addEventListener('click', async () => {
           if (!lastOrigin) {
-            routeStatus.textContent = 'Use my location first so a route can start from your phone.';
+            setRouteState('error', 'Use my location first so a route can start from your phone.');
             return;
           }
           if (!routing || !routeGraph) {
-            routeStatus.textContent = 'No verified offline road graph is installed for this area.';
+            setRouteState('error', 'No verified offline road graph is installed for this area.');
             return;
           }
-
-          const shelter = [...map.querySelectorAll('[data-map-location][data-map-latitude][data-map-longitude]')]
-            .map((marker) => ({
-              location: marker.dataset.mapLocation,
-              spaces: Number(marker.dataset.mapSpaces),
-              status: marker.dataset.mapStatus,
-              coordinate: {
-                latitude: Number(marker.dataset.mapLatitude),
-                longitude: Number(marker.dataset.mapLongitude)
-              }
-            }))
-            .filter((record) => record.status === 'OPEN' && record.spaces > 0)
-            .sort((first, second) => geo.distanceKm(lastOrigin, first.coordinate) - geo.distanceKm(lastOrigin, second.coordinate))[0];
-
-          if (!shelter) {
-            routeStatus.textContent = 'No open shelter with available spaces was found.';
+          if (!routeAllowed) {
+            setRouteState('error', 'Routing requires current authenticated shelter information.');
             return;
           }
+          if (reachableRoutes.length === 0) await calculateReachableRoutes();
+          const candidate = reachableRoutes[0];
+          if (!candidate) return;
 
+          const { destination: shelter, route } = candidate;
+          setButtonState(routeButton, 'Drawing route…', {
+            busy: true,
+            disabled: true
+          });
+          setRouteState('loading', `Drawing the fastest safe road path to ${shelter.location}…`);
+          setMapBanner(`Drawing route to ${shelter.location}…`, 'loading');
+          await yieldForStatusPaint();
           try {
             const baselineRoute = routing.shortestPath(
               routeGraph,
@@ -479,25 +656,15 @@
               hazardRecords,
               Date.now()
             );
-            const route = routing.shortestPath(
-              routeGraph,
-              lastOrigin,
-              shelter.coordinate,
-              { blockedEdges }
-            );
-            if (route.originSnap.distanceMeters > 1_500 || route.destinationSnap.distanceMeters > 1_500) {
-              routeStatus.textContent = 'Your location or the shelter is outside the bundled Mirpur road coverage.';
-              return;
-            }
             mapBounds = routeBounds(route);
             drawOfflineRoads(routeGraph, mapBounds);
             positionMarkers();
             map.classList.add('is-route-focused');
             drawRoute(route);
-            void detailedMap?.showRoute(route);
+            await detailedMap?.showRoute(route);
             drawRoadLabels(route.edges, 8);
             if (routeLocation) {
-              routeLocation.textContent = `Your location: ${lastOrigin.latitude.toFixed(5)}, ${lastOrigin.longitude.toFixed(5)}. Destination: ${shelter.location}.`;
+              routeLocation.textContent = `From your current location to ${shelter.location}.`;
             }
             if (routeRoads) {
               const roadNames = route.roadNames?.length > 0 ? route.roadNames : ['Unnamed mapped road'];
@@ -511,11 +678,19 @@
             const hazardMessage = blockedEdges.size > 0
               ? ` Avoiding ${blockedEdges.size} road segment${blockedEdges.size === 1 ? '' : 's'} affected by ${blockingHazards.length} authenticated hazard${blockingHazards.length === 1 ? '' : 's'}${detourMeters >= 10 ? `; safety detour adds ${geo.formatDistance(detourMeters / 1000)}` : ''}.`
               : ' No authenticated hazard intersects this route.';
-            routeStatus.textContent = `Route to ${shelter.location}: ${geo.formatDistance(route.distanceMeters / 1000)} on mapped roads.${hazardMessage}`;
+            setRouteState('success', `Fastest safe route: ${geo.formatDistance(route.distanceMeters / 1000)} by mapped roads.${hazardMessage}`);
+            setMapBanner(
+              `Route active · ${shelter.location} · ${geo.formatDistance(route.distanceMeters / 1000)}`,
+              'success'
+            );
+            setButtonState(routeButton, 'Route shown');
+            map.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
           } catch (error) {
-            routeStatus.textContent = blockingHazards.length > 0
+            setRouteState('error', blockingHazards.length > 0
               ? `${error.message}. Current authenticated hazard zones may disconnect the available road graph.`
-              : error.message;
+              : error.message);
+            setMapBanner('Route could not be drawn', 'error');
+            setButtonState(routeButton, 'Try route again');
           }
         });
       }
@@ -636,7 +811,7 @@
         : null;
     }
 
-    function initialize({ nav, appView, gateway }) {
+    function initialize({ nav, appView, gateway, initialPage = 'HOME' }) {
       if (!nav || !appView) {
         throw new Error('Navigation controls are unavailable');
       }
@@ -652,7 +827,10 @@
         void show(button.dataset.page, appView);
       });
 
-      void show('HOME', appView);
+      nav.querySelectorAll('[data-page]').forEach((item) => {
+        item.setAttribute('aria-current', item.dataset.page === initialPage ? 'page' : 'false');
+      });
+      void show(initialPage, appView);
     }
 
     return {
@@ -660,8 +838,10 @@
       show,
       refresh,
       setDemoLocation,
+      requestCurrentLocation: requestDeviceLocation,
       receiveNativeLocation,
-      receiveNativeLocationError
+      receiveNativeLocationError,
+      receiveNativeLocationProgress
     };
   }
 

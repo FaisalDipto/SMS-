@@ -1,5 +1,6 @@
 node_modules/
 coverage/
+/.cache/
 .DS_Store
 service/*.db
 service/*.db-*

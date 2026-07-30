@@ -262,7 +262,14 @@ func SerializeError(requestID, code, message string) string {
 	}, "|")
 }
 
-func SerializeAlert(alertID, priority string, expires int64, region, message string) (string, error) {
+func SerializeAlert(
+	requestID, alertID, priority string,
+	expires int64,
+	region, message string,
+) (string, error) {
+	if !identifierPattern.MatchString(requestID) {
+		return "", fmt.Errorf("invalid request ID")
+	}
 	if !identifierPattern.MatchString(alertID) {
 		return "", fmt.Errorf("invalid alert ID")
 	}
@@ -282,6 +289,7 @@ func SerializeAlert(alertID, priority string, expires int64, region, message str
 	fields := []string{
 		"ALT",
 		protocolVersion,
+		requestID,
 		alertID,
 		priority,
 		strconv.FormatInt(expires, 10),

@@ -78,7 +78,7 @@ test('disables routing for shelter information without a current expiry', () => 
     authentication: 'AUTHENTICATED'
   }, 1_700_000_000_000);
 
-  assert.match(html, /id="map-route" type="button" disabled/);
+  assert.match(html, /id="map-route" type="button" data-route-allowed="false" disabled/);
   assert.match(html, /Routing is disabled until current shelter information/);
 });
 
@@ -92,7 +92,7 @@ test('disables routing for current but unauthenticated shelter information', () 
     authentication: 'UNVERIFIED'
   }, now);
 
-  assert.match(html, /id="map-route" type="button" disabled/);
+  assert.match(html, /id="map-route" type="button" data-route-allowed="false" disabled/);
   assert.match(html, /not authenticated by the gateway/);
   assert.match(html, /Unverified message/);
 });
@@ -111,7 +111,7 @@ test('renders alert priority and escaped messages', () => {
   assert.match(html, /HIGH/);
   assert.match(html, /Avoid &lt;the bridge&gt;/);
   assert.match(html, /Expires/);
-  assert.match(html, /Authenticated alert/);
+  assert.match(html, /Authenticated/);
 });
 
 test('rejects malformed shelter payloads', () => {
@@ -156,11 +156,25 @@ test('renders bundled shelter coordinates on the offline map', () => {
   assert.match(html, /data-map-location="MIRPUR"/);
   assert.match(html, /Tap a marker to view shelter details/);
   assert.match(html, /Use my location/);
-  assert.match(html, /straight-line distances/);
-  assert.match(html, /Find route to nearest open shelter/);
+  assert.match(html, /reachable on mapped roads/);
+  assert.match(html, /Show fastest safe route/);
+  assert.match(html, /data-route-allowed="false" disabled/);
+  assert.match(html, /map-route-banner/);
   assert.match(html, /map-route-overlay/);
   assert.match(html, /OpenStreetMap contributors/);
   assert.match(html, /Detailed basemap data is bundled for offline use/);
+});
+
+test('explains that an empty User map is waiting for SMS data', () => {
+  const html = renderer.renderMapPage({
+    region: 'DHK',
+    payload: ''
+  });
+
+  assert.match(html, /Waiting for an SMS update/);
+  assert.match(html, /Safety data is not preloaded/);
+  assert.match(html, /Get shelters/);
+  assert.match(html, /No shelter markers/);
 });
 
 test('renders recent SMS activity safely', () => {

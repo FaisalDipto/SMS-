@@ -19,6 +19,12 @@ class GatewayWebBridge(
     fun getAppRole(): String = GatewayConfig.appRole(appContext)
 
     @JavascriptInterface
+    fun isRoleLocked(): Boolean = GatewayConfig.isRoleLocked()
+
+    @JavascriptInterface
+    fun isUserConfigurationLocked(): Boolean = GatewayConfig.isUserEdition()
+
+    @JavascriptInterface
     fun saveAppRole(value: String): String = GatewayConfig.saveAppRole(appContext, value)
 
     @JavascriptInterface

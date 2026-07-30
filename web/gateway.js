@@ -103,6 +103,10 @@
       status.textContent = 'Pi URL loaded. Check the connection when the service is running.';
       const authenticationConfigured = bridge.getAuthenticationStatus?.() === 'configured';
       const initialRole = getAppRole();
+      const roleLocked = bridge.isRoleLocked?.() === true;
+      const userConfigurationLocked = bridge.isUserConfigurationLocked?.() === true;
+      if (roleSelector) roleSelector.hidden = roleLocked;
+      if (administratorSetup && userConfigurationLocked) administratorSetup.hidden = true;
       if (roleSelect) roleSelect.value = initialRole;
       applyAppRole(initialRole, {
         roleRoot,
@@ -111,17 +115,19 @@
         gatewayTitle,
         administratorSetup
       });
-      saveRoleButton?.addEventListener('click', () => {
-        const savedRole = saveAppRole(roleSelect?.value);
-        if (roleSelect) roleSelect.value = savedRole;
-        applyAppRole(savedRole, {
-          roleRoot,
-          roleDescription,
-          gatewayEyebrow,
-          gatewayTitle,
-          administratorSetup
+      if (!roleLocked) {
+        saveRoleButton?.addEventListener('click', () => {
+          const savedRole = saveAppRole(roleSelect?.value);
+          if (roleSelect) roleSelect.value = savedRole;
+          applyAppRole(savedRole, {
+            roleRoot,
+            roleDescription,
+            gatewayEyebrow,
+            gatewayTitle,
+            administratorSetup
+          });
         });
-      });
+      }
       setAuthenticationState(authenticationConfigured, {
         authenticationKeyInput,
         saveAuthenticationKeyButton,
@@ -129,6 +135,14 @@
         replaceAuthenticationKeyButton,
         administratorSetup
       });
+      if (userConfigurationLocked) {
+        authenticationStatus.textContent =
+          'The controlled-demo response verification profile is installed.';
+        authenticationBadge.textContent = 'Ready';
+        requestStatus.textContent = serviceNumberInput.value
+          ? `Ready to request crisis information from ${serviceNumberInput.value}.`
+          : 'This User build has no SMS service number. Rebuild it with a configured number.';
+      }
 
       saveAuthenticationKeyButton.addEventListener('click', () => {
         const result = bridge.saveAuthenticationKey?.(authenticationKeyInput.value);
@@ -183,7 +197,8 @@
       requestSheltersButton.addEventListener('click', () => {
         try {
           const result = sendShelterRequest(serviceNumberInput.value, 'DHK');
-          requestStatus.textContent = `Request ${result.requestId} queued for SMS delivery.`;
+          requestStatus.textContent =
+            `Shelter request ${result.requestId} sent by SMS. Waiting for the gateway response; the map will update automatically.`;
           requestSheltersButton.dataset.requestId = result.requestId;
           if (requestHandler) {
             void requestHandler(result);
@@ -196,7 +211,8 @@
       requestAlertsButton.addEventListener('click', () => {
         try {
           const result = sendAlertRequest(serviceNumberInput.value, 'DHK');
-          requestStatus.textContent = `Alert request ${result.requestId} queued for SMS delivery.`;
+          requestStatus.textContent =
+            `Alert request ${result.requestId} sent by SMS. Waiting for the gateway response.`;
           requestAlertsButton.dataset.requestId = result.requestId;
           if (requestHandler) {
             void requestHandler(result);
@@ -209,7 +225,8 @@
       requestHazardsButton.addEventListener('click', () => {
         try {
           const result = sendHazardRequest(serviceNumberInput.value, 'DHK');
-          requestStatus.textContent = `Hazard request ${result.requestId} queued for SMS delivery.`;
+          requestStatus.textContent =
+            `Hazard request ${result.requestId} sent by SMS. Waiting for the gateway response.`;
           requestHazardsButton.dataset.requestId = result.requestId;
           if (requestHandler) {
             void requestHandler(result);
@@ -244,7 +261,7 @@
         elements.gatewayEyebrow.textContent = userMode ? 'Personal SMS client' : 'Gateway connection';
       }
       if (elements.gatewayTitle) {
-        elements.gatewayTitle.textContent = userMode ? 'SMSWeb user app' : 'Raspberry Pi service';
+        elements.gatewayTitle.textContent = userMode ? 'Crisis information by SMS' : 'Raspberry Pi service';
       }
       if (elements.administratorSetup) {
         const summary = elements.administratorSetup.querySelector?.('summary');

@@ -266,6 +266,32 @@
     return runRequest(STORES.COMPLETED_RESPONSES, 'readwrite', (store) => store.delete(responseKey));
   }
 
+  async function purgeLegacyBundledDemoData() {
+    const page = await getPage('SHELTER:DHK');
+    if (page?.transportSource !== 'bundled-user-demo') return false;
+
+    const legacyAlertIds = [
+      'DEMO-ALERT-MIRPUR',
+      'DEMO-ALERT-MEDICAL',
+      'DEMO-ALERT-ROADS'
+    ];
+    const legacyHazardIds = [
+      'DEMO-HZD-MIRPUR',
+      'DEMO-HZD-AIRPORT',
+      'DEMO-HZD-DHANMONDI',
+      'DEMO-HZD-JATRABARI'
+    ];
+
+    await Promise.all([
+      runRequest(STORES.PAGES, 'readwrite', (store) => store.delete('SHELTER:DHK')),
+      ...legacyAlertIds.map((alertId) =>
+        runRequest(STORES.ALERTS, 'readwrite', (store) => store.delete(alertId))),
+      ...legacyHazardIds.map((hazardId) =>
+        runRequest(STORES.HAZARDS, 'readwrite', (store) => store.delete(hazardId)))
+    ]);
+    return true;
+  }
+
   return {
     DB_NAME,
     DB_VERSION,
@@ -287,6 +313,7 @@
     removeResponsePart,
     saveCompletedResponse,
     getCompletedResponse,
-    removeCompletedResponse
+    removeCompletedResponse,
+    purgeLegacyBundledDemoData
   };
 });

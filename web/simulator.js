@@ -120,7 +120,7 @@
         };
 
         await storage.saveMessage({
-          requestId: alert.alertId,
+          requestId: alert.requestId || alert.alertId,
           direction: 'incoming',
           rawText,
           status: 'received',

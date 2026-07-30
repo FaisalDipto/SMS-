@@ -210,10 +210,97 @@
     };
   }
 
+  function fastestReachableDestinations(
+    graph,
+    origin,
+    destinations,
+    { blockedEdges = new Set(), maxSnapDistanceMeters = 500 } = {}
+  ) {
+    requireGraph(graph);
+    if (!geo) throw new Error('Geographic distance support is unavailable');
+    if (!Array.isArray(destinations)) throw new Error('Destinations must be an array');
+
+    const start = findNearestNode(graph, origin);
+    if (!start || start.distanceMeters > maxSnapDistanceMeters) return [];
+
+    const candidates = destinations.map((destination) => {
+      if (!destination?.coordinate) return null;
+      try {
+        const target = findNearestNode(graph, destination.coordinate);
+        return target.distanceMeters <= maxSnapDistanceMeters
+          ? { destination, target }
+          : null;
+      } catch (_error) {
+        return null;
+      }
+    }).filter(Boolean);
+    if (candidates.length === 0) return [];
+
+    const remainingTargets = new Set(candidates.map(({ target }) => target.nodeId));
+    const distances = new Map([[start.nodeId, 0]]);
+    const previous = new Map();
+    const queue = new MinHeap();
+    queue.push({ nodeId: start.nodeId, priority: 0 });
+
+    while (remainingTargets.size > 0) {
+      const current = queue.pop();
+      if (!current) break;
+      if (current.priority !== distances.get(current.nodeId)) continue;
+      remainingTargets.delete(current.nodeId);
+
+      for (const edge of graph.edges[current.nodeId] || []) {
+        if (edge.id && blockedEdges.has(edge.id)) continue;
+        const edgeDistance = edgeDistanceMeters(graph, current.nodeId, edge);
+        const candidateDistance = current.priority + edgeDistance;
+        if (candidateDistance >= (distances.get(edge.to) ?? Number.POSITIVE_INFINITY)) continue;
+        distances.set(edge.to, candidateDistance);
+        previous.set(edge.to, { nodeId: current.nodeId, edge });
+        queue.push({ nodeId: edge.to, priority: candidateDistance });
+      }
+    }
+
+    return candidates.flatMap(({ destination, target }) => {
+      if (!distances.has(target.nodeId)) return [];
+
+      const nodeIds = [];
+      const pathEdges = [];
+      for (let nodeId = target.nodeId; nodeId; ) {
+        nodeIds.unshift(nodeId);
+        if (nodeId === start.nodeId) break;
+        const step = previous.get(nodeId);
+        if (!step) return [];
+        pathEdges.unshift({ ...step.edge, from: step.nodeId });
+        nodeId = step.nodeId;
+      }
+
+      return [{
+        destination,
+        route: {
+          distanceMeters: distances.get(target.nodeId) +
+            start.distanceMeters + target.distanceMeters,
+          nodeIds,
+          coordinates: [
+            { latitude: origin.latitude, longitude: origin.longitude },
+            ...nodeIds.map((nodeId) => nodeCoordinate(graph, nodeId)),
+            {
+              latitude: destination.coordinate.latitude,
+              longitude: destination.coordinate.longitude
+            }
+          ],
+          edges: pathEdges,
+          roadNames: [...new Set(pathEdges.map((edge) => edge.roadName).filter(Boolean))],
+          originSnap: start,
+          destinationSnap: target
+        }
+      }];
+    }).sort((first, second) => first.route.distanceMeters - second.route.distanceMeters);
+  }
+
   return Object.freeze({
     findNearestNode,
     blockedEdgesForHazards,
     distanceFromHazardToEdgeMeters,
-    shortestPath
+    shortestPath,
+    fastestReachableDestinations
   });
 });

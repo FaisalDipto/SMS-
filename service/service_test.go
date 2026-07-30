@@ -204,8 +204,8 @@ func TestIncomingShelterRequest(t *testing.T) {
 	if gateway.Recipient != "+8801712345678" {
 		t.Fatalf("unexpected recipient: %s", gateway.Recipient)
 	}
-	if len(gateway.Messages) != 2 {
-		t.Fatalf("expected two protocol parts, got %d: %#v", len(gateway.Messages), gateway.Messages)
+	if len(gateway.Messages) < 3 {
+		t.Fatalf("expected multipart expanded shelter data, got %d parts: %#v", len(gateway.Messages), gateway.Messages)
 	}
 	if gateway.Text != gateway.Messages[0] {
 		t.Fatalf("legacy text field should contain the first part")
@@ -235,8 +235,34 @@ func TestIncomingShelterRequest(t *testing.T) {
 		}
 		payloadParts = append(payloadParts, fields[10])
 	}
-	if strings.Join(payloadParts, ";") != "DU:23.7271:90.3944:0:FULL;MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN" {
-		t.Fatalf("unexpected reconstructed shelter payload: %s", strings.Join(payloadParts, ";"))
+	payload := strings.Join(payloadParts, ";")
+	records := strings.Split(payload, ";")
+	if len(records) != 18 {
+		t.Fatalf("expected eighteen expanded demo shelter records, got %d: %s", len(records), payload)
+	}
+	for _, expected := range []string{
+		"BADDA:23.7806:90.4267:60:OPEN",
+		"BANANI:23.7937:90.4066:48:OPEN",
+		"BASHUNDHARA:23.8151:90.4255:75:OPEN",
+		"DHANMONDI:23.7465:90.376:40:OPEN",
+		"DU:23.7271:90.3944:0:FULL",
+		"FARMGATE:23.7582:90.3906:35:OPEN",
+		"GULSHAN:23.7925:90.4078:30:OPEN",
+		"JATRABARI:23.7104:90.434:90:OPEN",
+		"KALLYANPUR:23.7795:90.3615:70:OPEN",
+		"KHILGAON:23.7509:90.425:42:OPEN",
+		"LALBAGH:23.7182:90.388:25:OPEN",
+		"MIRPUR:23.8069:90.3687:120:OPEN",
+		"MOHAMMADPUR:23.7588:90.3588:65:OPEN",
+		"MOTIJHEEL:23.7337:90.4176:50:OPEN",
+		"PALLABI:23.8247:90.3654:85:OPEN",
+		"RAMNA:23.7377:90.4016:0:FULL",
+		"TEJGAON:23.7631:90.4007:55:OPEN",
+		"UTTARA:23.8759:90.4002:80:OPEN",
+	} {
+		if !strings.Contains(payload, expected) {
+			t.Fatalf("expanded shelter payload is missing %s: %s", expected, payload)
+		}
 	}
 	verifiedAt, err := strconv.ParseInt(firstFields[8], 10, 64)
 	if err != nil {
@@ -254,8 +280,12 @@ func TestIncomingShelterRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 3 {
-		t.Fatalf("expected one incoming and two outgoing messages, got %d", count)
+	if count != 1+len(gateway.Messages) {
+		t.Fatalf(
+			"expected one incoming and %d outgoing messages, got %d",
+			len(gateway.Messages),
+			count,
+		)
 	}
 }
 
@@ -310,11 +340,42 @@ func TestIncomingAlertRequest(t *testing.T) {
 	if err := json.Unmarshal(response.Body.Bytes(), &gateway); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(gateway.Text, "ALT|1|F22P|HIGH|") {
+	if !strings.HasPrefix(gateway.Text, "ALT|1|B33M|F22P|HIGH|") {
 		t.Fatalf("unexpected alert response: %s", gateway.Text)
 	}
 	if !VerifyMessageSignature(gateway.Text, testAuthenticationKey) {
 		t.Fatalf("expected signed alert response: %s", gateway.Text)
+	}
+}
+
+func TestRepeatedAlertRequestsProduceDistinctCorrelatedResponses(t *testing.T) {
+	_, handler := newTestServer(t)
+	var responses []string
+
+	for _, requestID := range []string{"B33M", "C44P"} {
+		response := requestJSON(t, handler, http.MethodPost, "/sms/incoming", incomingSMS{
+			Sender: "+8801712345678",
+			Text:   "REQ|1|" + requestID + "|ALERT|DHK",
+		})
+		if response.Code != http.StatusOK {
+			t.Fatalf("unexpected status: %d %s", response.Code, response.Body.String())
+		}
+
+		var gateway gatewayResponse
+		if err := json.Unmarshal(response.Body.Bytes(), &gateway); err != nil {
+			t.Fatal(err)
+		}
+		if !strings.HasPrefix(gateway.Text, "ALT|1|"+requestID+"|F22P|") {
+			t.Fatalf("alert response is not correlated to %s: %s", requestID, gateway.Text)
+		}
+		if !VerifyMessageSignature(gateway.Text, testAuthenticationKey) {
+			t.Fatalf("expected signed alert response: %s", gateway.Text)
+		}
+		responses = append(responses, gateway.Text)
+	}
+
+	if responses[0] == responses[1] {
+		t.Fatal("repeated alert requests must not produce replay-identical responses")
 	}
 }
 
@@ -379,17 +440,24 @@ CREATE TABLE shelters (
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(shelters) != 3 {
+	if len(shelters) != 18 {
 		t.Fatalf("expected migrated and seeded shelters, got %d", len(shelters))
 	}
-	if shelters[1].Latitude != 23.8069 || shelters[1].Longitude != 90.3687 {
-		t.Fatalf("expected migrated Mirpur coordinates, got %.4f, %.4f", shelters[1].Latitude, shelters[1].Longitude)
+	var mirpur Shelter
+	for _, shelter := range shelters {
+		if shelter.Location == "MIRPUR" {
+			mirpur = shelter
+			break
+		}
 	}
-	if shelters[1].Trust != "DEMO" || shelters[1].Source != "SMSWEB_DEMO" {
-		t.Fatalf("expected migrated demo metadata, got %s from %s", shelters[1].Trust, shelters[1].Source)
+	if mirpur.Latitude != 23.8069 || mirpur.Longitude != 90.3687 {
+		t.Fatalf("expected migrated Mirpur coordinates, got %.4f, %.4f", mirpur.Latitude, mirpur.Longitude)
 	}
-	if shelters[1].VerifiedAt <= 0 || shelters[1].ExpiresAt <= shelters[1].VerifiedAt {
-		t.Fatalf("expected current migration timestamps, got %d to %d", shelters[1].VerifiedAt, shelters[1].ExpiresAt)
+	if mirpur.Trust != "DEMO" || mirpur.Source != "SMSWEB_DEMO" {
+		t.Fatalf("expected migrated demo metadata, got %s from %s", mirpur.Trust, mirpur.Source)
+	}
+	if mirpur.VerifiedAt <= 0 || mirpur.ExpiresAt <= mirpur.VerifiedAt {
+		t.Fatalf("expected current migration timestamps, got %d to %d", mirpur.VerifiedAt, mirpur.ExpiresAt)
 	}
 }
 

@@ -1,5 +1,4 @@
 <resources>
-    <string name="app_name">SMSWeb Gateway</string>
     <string name="pi_url_hint">Raspberry Pi URL</string>
     <string name="save_url">Save Pi URL</string>
     <string name="check_connection">Check connection</string>

@@ -10,6 +10,32 @@
   </head>
   <body>
     <main class="app-shell">
+      <header id="user-app-header" class="user-app-header" hidden>
+        <div class="brand-lockup">
+          <span class="brand-mark" aria-hidden="true">
+            <svg viewBox="0 0 48 48" role="img">
+              <path d="M24 3 41 10v12c0 11-6.8 19.2-17 23C13.8 41.2 7 33 7 22V10L24 3Z"></path>
+              <path d="M15 17.5h18v12H23l-6 5v-5h-2v-12Z"></path>
+              <circle cx="24" cy="23.5" r="3"></circle>
+            </svg>
+          </span>
+          <span>
+            <strong>SMSWeb</strong>
+            <small>Dhaka safety network</small>
+          </span>
+        </div>
+        <span class="offline-ready"><i aria-hidden="true"></i> Offline ready</span>
+      </header>
+
+      <section id="user-quick-panel" class="user-quick-panel" hidden>
+        <div>
+          <p class="eyebrow">SMS safety channel</p>
+          <h2>Request safety updates.</h2>
+          <p>No emergency data is preloaded. Each request and response travels by SMS.</p>
+        </div>
+        <div id="user-request-actions"></div>
+      </section>
+
       <header class="app-header">
         <p class="eyebrow">Offline crisis information</p>
         <h1>SMSWeb</h1>
@@ -180,12 +206,30 @@
       </section>
 
       <nav id="app-nav" class="app-nav" aria-label="Main navigation">
-        <button type="button" data-page="HOME" aria-current="page">Home</button>
-        <button type="button" data-page="SHELTER" aria-current="false">Shelters</button>
-        <button type="button" data-page="ALERTS" aria-current="false">Alerts</button>
-        <button type="button" data-page="HAZARDS" aria-current="false">Hazards</button>
-        <button type="button" data-page="MAP" aria-current="false">Map</button>
-        <button type="button" data-page="ACTIVITY" aria-current="false">Activity</button>
+        <button type="button" data-page="MAP" aria-current="false">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18-6 3V6l6-3 6 3 6-3v15l-6 3-6-3Zm0 0V3m6 18V6"></path></svg>
+          <span>Map</span>
+        </button>
+        <button type="button" data-page="SHELTER" aria-current="false">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9Z"></path></svg>
+          <span>Shelters</span>
+        </button>
+        <button type="button" data-page="ALERTS" aria-current="false">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM9.5 21h5"></path></svg>
+          <span>Alerts</span>
+        </button>
+        <button type="button" data-page="HAZARDS" aria-current="false">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.5 20h19L12 3Zm0 6v5m0 3v.5"></path></svg>
+          <span>Hazards</span>
+        </button>
+        <button type="button" data-page="ACTIVITY" aria-current="false">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v16H5V4Zm4 5h6M9 13h6M9 17h4"></path></svg>
+          <span>Updates</span>
+        </button>
+        <button type="button" data-page="HOME" aria-current="page">
+          <svg class="nav-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9Z"></path></svg>
+          <span>Home</span>
+        </button>
       </nav>
 
       <section id="app-view" aria-live="polite"></section>

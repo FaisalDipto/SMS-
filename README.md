@@ -287,13 +287,13 @@ current expiry.
 ### 5.3 Alert format
 
 ```text
-ALT|VERSION|ALERT_ID|PRIORITY|EXPIRES|REGION|MESSAGE
+ALT|VERSION|REQUEST_ID|ALERT_ID|PRIORITY|EXPIRES|REGION|MESSAGE
 ```
 
 Example:
 
 ```text
-ALT|1|F22P|HIGH|1764000000|DHK|Avoid road near Mirpur bridge
+ALT|1|A17K|F22P|HIGH|1764000000|DHK|Avoid road near Mirpur bridge
 ```
 
 ### 5.4 Error format
@@ -880,7 +880,11 @@ records identify named areas, not verified shelter entrances; they are labelled
 as demo data and must be replaced with authoritative shelter records before
 emergency navigation is enabled.
 
-The dashboard can request the phone's location and calculate great-circle (straight-line) distances to coordinate-bearing shelters. These distances are not road travel distances and must not be presented as an emergency route.
+The dashboard requests the phone's location, calculates paths to every reachable
+open shelter on the bundled road graph, and ranks those shelters by mapped-road
+distance. It does not use straight-line proximity to choose the destination.
+Shelters outside the installed routing graph are reported as outside offline
+coverage rather than being shown with a misleading distance.
 
 The routing engine uses a separate local graph containing road nodes and directed edges. Each edge has a distance and can be marked blocked by an emergency report. The current demo bundles an expanded five-tile Mirpur graph generated from licensed OpenStreetMap data; it is still deliberately limited to that verified coverage area.
 
@@ -1045,7 +1049,7 @@ Open Git Bash in the project root:
 
 ```bash
 cd service
-export SMSWEB_AUTH_KEY='replace-with-one-private-key-at-least-16-characters'
+export SMSWEB_AUTH_KEY='smsweb-local-judge-demo-key'
 go run . -addr :8080 -db smsweb.db
 ```
 
@@ -1072,50 +1076,77 @@ If the Android phone is connected through the PC's Wi-Fi or hotspot, run
 `http://PC-IP:8080` in the Android app. `localhost` on the phone means the phone,
 not the PC.
 
-### B. Build and run the Android gateway
+### B. Build the separate Android editions
 
 1. Open the `android-bridge` folder in Android Studio.
 2. Wait for Gradle sync to finish.
-3. Connect the Android gateway phone with USB debugging enabled.
-4. Select the phone and the `app` run configuration in the toolbar.
-5. Select the green Run triangle.
-6. Allow SMS and location permissions.
-7. Open **Administrator setup**.
-8. Provision exactly the same key used for `SMSWEB_AUTH_KEY`.
-9. Save `http://PC-IP:8080` as the Pi URL and select **Check connection**.
-10. Save the gateway phone's own SMS number.
+3. Select the `gatewayDebug` variant and assemble it, then select `userDebug`
+   and assemble it. From PowerShell, both can be built together:
+
+   ```powershell
+   $env:JAVA_HOME = "C:\Program Files\Android\Android Studio\jbr"
+   .\gradlew.bat :app:assembleGatewayDebug :app:assembleUserDebug
+   ```
+
+4. Install
+   `app/build/outputs/apk/gateway/debug/app-gateway-debug.apk` on the gateway
+   phone.
+5. Install `app/build/outputs/apk/user/debug/app-user-debug.apk` on the user
+   phone.
+
+The editions use separate Android application IDs and names, and neither asks
+the operator to select a role.
+
+### B1. Configure the gateway phone
+
+1. Allow SMS and location permissions.
+2. Open **Administrator setup**.
+3. Provision `smsweb-local-judge-demo-key`, matching `SMSWEB_AUTH_KEY` in the
+   run command above.
+4. Save `http://PC-IP:8080` as the Pi URL and select **Check connection**.
+5. Save the gateway phone's own SMS number.
 
 The key is entered by the deployment operator once. A person requesting shelter
 information does not enter or receive it. Android stores it in app-private
 preferences, uses it to verify Pi signatures and authorize local operator
 updates, and does not expose a JavaScript getter for it.
 
-### B2. Configure a user phone
+### B2. Use the User phone
 
-The same APK now supports a separate **User phone** role:
-
-1. Install the APK on the resident/test phone.
-2. In **This phone's role**, select **User phone** and tap **Use this role**.
-3. Under **User device setup**, set the SMSWeb service number to the gateway
-   phone's SIM number.
-4. For this hackathon build, provision the same response authentication key
-   during controlled installation.
-5. The Pi URL and authority console are hidden in User mode.
-6. Tap **Request shelters**, **Request alerts**, or **Request hazards**.
-7. When the response SMS returns from the configured gateway number, the app
+1. Install the User APK on the resident/test phone.
+2. Allow SMS and location permissions.
+3. The app opens on the interactive offline Greater Dhaka basemap with no
+   preloaded emergency records. This makes it clear that all shelter, alert, and
+   hazard information must arrive through the SMS protocol.
+4. Tap **Shelters**, **Alerts**, or **Hazards** in the update panel to request
+   current information. The
+   User edition has no role, phone-number, Pi URL, or key setup.
+5. When the response SMS returns from the configured gateway number, the app
    verifies it, blocks replays, stores it offline, and renders the relevant page.
 
-The shared-key step makes the two-phone hackathon demonstration functional, but
-it is not suitable for a publicly distributed client: extracting one public
-client's shared secret would compromise trust for every client. A production
-version must replace HMAC client verification with asymmetric signatures, where
-the service keeps a private signing key and user phones contain only a public
-verification key.
+When the Go service runs with `-demo`, its 18 shelters, three alerts, and four
+hazards are demonstration source records. They reach the User app only through
+the normal request, gateway, signed-response, SMS verification, and offline
+storage flow.
+
+The User APK is preconfigured for `+8801701485658`. If the gateway SIM changes,
+rebuild only the User edition:
+
+```powershell
+.\gradlew.bat :app:assembleUserDebug `
+  -PSMSWEB_USER_SERVICE_NUMBER="+8801XXXXXXXXX"
+```
+
+The fixed demo verification profile removes judge setup friction, but it is not
+suitable for public distribution: extracting a shared secret from one client
+would compromise every client. A production version must use asymmetric
+signatures, where the authority keeps the private signing key and User APKs
+contain only a public verification key.
 
 ### C. Real two-phone SMS test
 
-1. Keep the Go service and the first Android phone in **SMS gateway phone** mode.
-2. Put the second Android phone in **User phone** mode.
+1. Keep the Go service and SMSWeb Gateway APK running on the first phone.
+2. Open the SMSWeb User APK on the second phone.
 3. On the user phone, tap **Request shelters**, or send this to the gateway:
 
    ```text
@@ -1128,8 +1159,10 @@ verification key.
    `RECEIVED`, `FORWARDED`, `AUTHENTICATED`, and `HANDOFF` events.
 7. The user phone independently verifies and renders the response.
 8. Open **Shelters**, **Map**, and **Activity** on the user phone.
-9. On **Map**, select **Use my location**, then
-   **Find route to nearest open shelter**.
+9. On **Map**, select **Use my location**. Wait for the reachable shelter list,
+   which contains mapped-road distances only, then select
+   **Show fastest safe route**. The map should zoom to a thick blue route and
+   show a green route summary banner.
 
 Request current road hazards with:
 
@@ -1162,13 +1195,13 @@ GET  /admin/state
 
 - The offline vector basemap covers greater Dhaka, but road routing is still
   limited to the bundled Mirpur graph. This is not full-Dhaka navigation.
-- Shelter coordinates and entrances must be supplied and field-checked by a
-  responsible authority before real use.
-- The symmetric shared key proves that a response came from the configured
-  local service. It is not a national authority identity system, key rotation
-  service, or multi-role authorization model. Provisioning that secret on user
-  phones is acceptable only for this controlled demo; public deployment
-  requires asymmetric signatures.
+- The bundled ten-location Dhaka dataset is demonstration data, not an
+  authority-approved shelter registry. Coordinates, entrances, capacities, and
+  accessibility must be field-checked before real use.
+- The controlled-demo symmetric key proves only that a response used the same
+  demo profile. It is not a national authority identity system, key rotation
+  service, or secure public-client model. Public deployment requires
+  asymmetric signatures.
 - `HANDOFF` means Android accepted the SMS for transmission; it is not a
   carrier delivery receipt.
 - Hazard avoidance is geometric intersection against a local graph. It needs

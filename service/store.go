@@ -173,8 +173,28 @@ INSERT OR IGNORE INTO shelters(
 ) VALUES
     ('DHK', 'MIRPUR', 23.8069, 90.3687, 120, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
     ('DHK', 'UTTARA', 23.8759, 90.4002, 80, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
-    ('DHK', 'DU', 23.7271, 90.3944, 0, 'FULL', 'DEMO', 'SMSWEB_DEMO', ?, ?)
-`, verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt)
+    ('DHK', 'DU', 23.7271, 90.3944, 0, 'FULL', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'MOHAMMADPUR', 23.7588, 90.3588, 65, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'DHANMONDI', 23.7465, 90.3760, 40, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'TEJGAON', 23.7631, 90.4007, 55, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'GULSHAN', 23.7925, 90.4078, 30, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'BASHUNDHARA', 23.8151, 90.4255, 75, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'MOTIJHEEL', 23.7337, 90.4176, 50, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'JATRABARI', 23.7104, 90.4340, 90, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'BANANI', 23.7937, 90.4066, 48, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'BADDA', 23.7806, 90.4267, 60, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'FARMGATE', 23.7582, 90.3906, 35, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'KALLYANPUR', 23.7795, 90.3615, 70, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'KHILGAON', 23.7509, 90.4250, 42, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'LALBAGH', 23.7182, 90.3880, 25, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'PALLABI', 23.8247, 90.3654, 85, 'OPEN', 'DEMO', 'SMSWEB_DEMO', ?, ?),
+    ('DHK', 'RAMNA', 23.7377, 90.4016, 0, 'FULL', 'DEMO', 'SMSWEB_DEMO', ?, ?)
+`, verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt,
+		verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt,
+		verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt,
+		verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt,
+		verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt,
+		verifiedAt, expiresAt, verifiedAt, expiresAt, verifiedAt, expiresAt)
 	if err != nil {
 		return fmt.Errorf("seed shelters: %w", err)
 	}
@@ -183,12 +203,42 @@ UPDATE shelters SET latitude = CASE location
     WHEN 'MIRPUR' THEN 23.8069
     WHEN 'UTTARA' THEN 23.8759
     WHEN 'DU' THEN 23.7271
+    WHEN 'MOHAMMADPUR' THEN 23.7588
+    WHEN 'DHANMONDI' THEN 23.7465
+    WHEN 'TEJGAON' THEN 23.7631
+    WHEN 'GULSHAN' THEN 23.7925
+    WHEN 'BASHUNDHARA' THEN 23.8151
+    WHEN 'MOTIJHEEL' THEN 23.7337
+    WHEN 'JATRABARI' THEN 23.7104
+    WHEN 'BANANI' THEN 23.7937
+    WHEN 'BADDA' THEN 23.7806
+    WHEN 'FARMGATE' THEN 23.7582
+    WHEN 'KALLYANPUR' THEN 23.7795
+    WHEN 'KHILGAON' THEN 23.7509
+    WHEN 'LALBAGH' THEN 23.7182
+    WHEN 'PALLABI' THEN 23.8247
+    WHEN 'RAMNA' THEN 23.7377
     ELSE latitude
 END,
 longitude = CASE location
     WHEN 'MIRPUR' THEN 90.3687
     WHEN 'UTTARA' THEN 90.4002
     WHEN 'DU' THEN 90.3944
+    WHEN 'MOHAMMADPUR' THEN 90.3588
+    WHEN 'DHANMONDI' THEN 90.3760
+    WHEN 'TEJGAON' THEN 90.4007
+    WHEN 'GULSHAN' THEN 90.4078
+    WHEN 'BASHUNDHARA' THEN 90.4255
+    WHEN 'MOTIJHEEL' THEN 90.4176
+    WHEN 'JATRABARI' THEN 90.4340
+    WHEN 'BANANI' THEN 90.4066
+    WHEN 'BADDA' THEN 90.4267
+    WHEN 'FARMGATE' THEN 90.3906
+    WHEN 'KALLYANPUR' THEN 90.3615
+    WHEN 'KHILGAON' THEN 90.4250
+    WHEN 'LALBAGH' THEN 90.3880
+    WHEN 'PALLABI' THEN 90.3654
+    WHEN 'RAMNA' THEN 90.4016
     ELSE longitude
 END
 WHERE region = 'DHK' AND (latitude = 0 OR longitude = 0);
@@ -199,7 +249,12 @@ SET trust = 'DEMO',
     verified_at = ?,
     expires_at = ?
 WHERE region = 'DHK'
-  AND location IN ('MIRPUR', 'UTTARA', 'DU')
+  AND location IN (
+      'MIRPUR', 'UTTARA', 'DU', 'MOHAMMADPUR', 'DHANMONDI',
+      'TEJGAON', 'GULSHAN', 'BASHUNDHARA', 'MOTIJHEEL', 'JATRABARI',
+      'BANANI', 'BADDA', 'FARMGATE', 'KALLYANPUR', 'KHILGAON',
+      'LALBAGH', 'PALLABI', 'RAMNA'
+  )
   AND source = 'SMSWEB_DEMO'
 `, verifiedAt, expiresAt)
 	if err != nil {

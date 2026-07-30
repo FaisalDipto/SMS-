@@ -96,3 +96,38 @@ test('ignores expired and unauthenticated hazards when blocking roads', () => {
     1_700_000_000_000
   ).size, 0);
 });
+
+test('ranks reachable shelters by actual road-path distance', () => {
+  const candidates = routing.fastestReachableDestinations(
+    graph,
+    { latitude: 23.8000, longitude: 90.3600 },
+    [{
+      location: 'LONGER',
+      coordinate: graph.nodes.C
+    }, {
+      location: 'FASTER',
+      coordinate: graph.nodes.D
+    }]
+  );
+
+  assert.deepEqual(candidates.map(({ destination }) => destination.location), [
+    'FASTER',
+    'LONGER'
+  ]);
+  assert.equal(candidates[0].route.distanceMeters, 1100);
+  assert.equal(candidates[1].route.distanceMeters, 2000);
+});
+
+test('excludes shelters outside installed road coverage', () => {
+  const candidates = routing.fastestReachableDestinations(
+    graph,
+    graph.nodes.A,
+    [{
+      location: 'OUTSIDE',
+      coordinate: { latitude: 24.1000, longitude: 90.8000 }
+    }],
+    { maxSnapDistanceMeters: 500 }
+  );
+
+  assert.deepEqual(candidates, []);
+});

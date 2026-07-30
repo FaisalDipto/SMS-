@@ -94,10 +94,15 @@ object MessageAuthenticator {
                 }
             }
             "ALT" -> {
-                if (fields.size != 7) {
+                val expiresIndex = when (fields.size) {
+                    7 -> 4 // Legacy ALT|VERSION|ALERT_ID|...
+                    8 -> 5 // Correlated ALT|VERSION|REQUEST_ID|ALERT_ID|...
+                    else -> null
+                }
+                if (expiresIndex == null) {
                     rejected(AuthenticationStatus.INVALID, "Signed alert format is invalid.")
                 } else {
-                    val expiresAt = fields[4].toLongOrNull()
+                    val expiresAt = fields[expiresIndex].toLongOrNull()
                         ?: return rejected(AuthenticationStatus.INVALID, "Alert expiry time is invalid.")
                     validateTimes(null, expiresAt, nowSeconds)
                 }

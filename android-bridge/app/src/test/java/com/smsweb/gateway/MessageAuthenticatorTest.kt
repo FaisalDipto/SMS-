@@ -37,7 +37,7 @@ class MessageAuthenticatorTest {
 
     @Test
     fun rejectsTamperingWrongKeyAndUnsignedMessages() {
-        val canonical = "ALT|1|F22P|HIGH|${now + 3_600}|DHK|Avoid Mirpur bridge"
+        val canonical = "ALT|1|A17K|F22P|HIGH|${now + 3_600}|DHK|Avoid Mirpur bridge"
         val message = signed(canonical)
 
         assertEquals(
@@ -56,7 +56,7 @@ class MessageAuthenticatorTest {
 
     @Test
     fun rejectsExpiredAndFutureDatedMessages() {
-        val expired = signed("ALT|1|F22P|HIGH|${now - 1}|DHK|Expired")
+        val expired = signed("ALT|1|A17K|F22P|HIGH|${now - 1}|DHK|Expired")
         val future = signed(
             "RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|" +
                 "${now + 301}|${now + 3_600}|MIRPUR:120:OPEN"
@@ -69,6 +69,23 @@ class MessageAuthenticatorTest {
         assertEquals(
             AuthenticationStatus.FUTURE,
             MessageAuthenticator.verify(future, key, now).status
+        )
+    }
+
+    @Test
+    fun acceptsLegacyAndRequestCorrelatedAlerts() {
+        val legacy = signed("ALT|1|F22P|HIGH|${now + 3_600}|DHK|Legacy warning")
+        val correlated = signed(
+            "ALT|1|A17K|F22P|HIGH|${now + 3_600}|DHK|Correlated warning"
+        )
+
+        assertEquals(
+            AuthenticationStatus.AUTHENTICATED,
+            MessageAuthenticator.verify(legacy, key, now).status
+        )
+        assertEquals(
+            AuthenticationStatus.AUTHENTICATED,
+            MessageAuthenticator.verify(correlated, key, now).status
         )
     }
 

@@ -163,7 +163,7 @@ test('switches between user and gateway phone roles', () => {
   });
 
   assert.equal(root.dataset.appRole, 'USER');
-  assert.equal(title.textContent, 'SMSWeb user app');
+  assert.equal(title.textContent, 'Crisis information by SMS');
   assert.match(description.textContent, /renders authenticated response SMS/);
 });
 

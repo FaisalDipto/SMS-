@@ -29,11 +29,13 @@ Copy-Item -LiteralPath (Join-Path $projectRoot "judge\README.txt") `
     -Destination $OutputDirectory
 
 if ($IncludeApk) {
-    $apk = Join-Path $projectRoot "android-bridge\app\build\outputs\apk\debug\app-debug.apk"
-    if (-not (Test-Path -LiteralPath $apk)) {
-        throw "Android APK not found. Build :app:assembleDebug first."
+    $gatewayApk = Join-Path $projectRoot "android-bridge\app\build\outputs\apk\gateway\debug\app-gateway-debug.apk"
+    $userApk = Join-Path $projectRoot "android-bridge\app\build\outputs\apk\user\debug\app-user-debug.apk"
+    if (-not (Test-Path -LiteralPath $gatewayApk) -or -not (Test-Path -LiteralPath $userApk)) {
+        throw "Android APKs not found. Build :app:assembleGatewayDebug and :app:assembleUserDebug first."
     }
-    Copy-Item -LiteralPath $apk -Destination (Join-Path $OutputDirectory "SMSWeb-Gateway-debug.apk")
+    Copy-Item -LiteralPath $gatewayApk -Destination (Join-Path $OutputDirectory "SMSWeb-Gateway-debug.apk")
+    Copy-Item -LiteralPath $userApk -Destination (Join-Path $OutputDirectory "SMSWeb-User-debug.apk")
 }
 
 $archive = "$OutputDirectory.zip"

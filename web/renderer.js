@@ -102,17 +102,22 @@
         ? 'This information has expired and cannot be used for routing.'
         : '';
 
-    return `<section class="trust-panel trust-${normalizedTrust.toLowerCase()}" aria-label="Information trust and source">
-      <div class="trust-heading">
-        <span class="trust-badge">${escapeHtml(displayLabel)}</span>
-        <strong>${escapeHtml(source)}</strong>
+    return `<details class="trust-panel trust-${normalizedTrust.toLowerCase()}" aria-label="Information trust and source">
+      <summary>
+        <span class="trust-heading">
+          <span class="trust-badge">${escapeHtml(displayLabel)}</span>
+          <strong>${escapeHtml(source)}</strong>
+        </span>
+        <span class="trust-more">Details</span>
+      </summary>
+      <div class="trust-details">
+        <p>${verifiedAt === null
+          ? 'Verification time not provided.'
+          : `Checked ${escapeHtml(formatTimestamp(verifiedAt))}.`}</p>
+        <p>${escapeHtml(warning)}</p>
+        ${freshnessWarning ? `<p class="trust-warning">${escapeHtml(freshnessWarning)}</p>` : ''}
       </div>
-      <p>${verifiedAt === null
-        ? 'Verification time not provided.'
-        : `Checked ${escapeHtml(formatTimestamp(verifiedAt))}.`}</p>
-      <p>${escapeHtml(warning)}</p>
-      ${freshnessWarning ? `<p class="trust-warning">${escapeHtml(freshnessWarning)}</p>` : ''}
-    </section>`;
+    </details>`;
   }
 
   function renderMetadata(record, now, showFreshness = true) {
@@ -225,13 +230,22 @@
 
   function renderShelterPage(page, now = Date.now()) {
     const shelters = parseShelterPayload(page.payload ?? page.content ?? '');
+    const openShelters = shelters.filter((shelter) => shelter.status === 'OPEN');
+    const availableSpaces = openShelters.reduce((total, shelter) => total + shelter.spaces, 0);
     const body = shelters.length === 0
-      ? '<p class="empty-state">No shelter records were included in this response.</p>'
-      : `<ul class="resource-list">
+      ? '<p class="empty-state">No shelter update has been received yet. Tap <strong>Get shelters</strong> in the SMS update panel to request one.</p>'
+      : `<div class="shelter-overview" aria-label="Shelter availability summary">
+          <span><strong>${openShelters.length}</strong> open shelters</span>
+          <span><strong>${availableSpaces}</strong> spaces available</span>
+        </div>
+        <ul class="resource-list">
           ${shelters.map((shelter) => {
             const status = SHELTER_STATUSES[shelter.status];
-            return `<li class="resource-item">
-              <div>
+            return `<li class="resource-item shelter-item" data-shelter-status="${escapeHtml(shelter.status)}">
+              <span class="resource-symbol" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9h-6v-6H9v6H3v-9Z"></path></svg>
+              </span>
+              <div class="resource-copy">
                 <h3>${escapeHtml(shelter.location)}</h3>
                 <p>${escapeHtml(shelter.spaces)} spaces available</p>
               </div>
@@ -252,9 +266,15 @@
   }
 
   function renderAlertsPage(alerts, now = Date.now()) {
-    const records = Array.isArray(alerts) ? alerts : [];
+    const priorityRank = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const records = Array.isArray(alerts)
+      ? alerts.slice().sort((left, right) =>
+        (priorityRank[right.priority] || 0) - (priorityRank[left.priority] || 0) ||
+        (toMilliseconds(right.receivedAt) || 0) - (toMilliseconds(left.receivedAt) || 0)
+      )
+      : [];
     const body = records.length === 0
-      ? '<p class="empty-state">No active alerts are available.</p>'
+      ? '<p class="empty-state">No alert update has been received yet. Tap <strong>Get alerts</strong> in the SMS update panel to request one.</p>'
       : `<ul class="resource-list alert-list">
           ${records.map((alert) => {
             const priority = ALERT_PRIORITIES.has(alert.priority) ? alert.priority : 'UNKNOWN';
@@ -263,9 +283,14 @@
             const authenticated =
               String(alert.authentication || '').toUpperCase() === 'AUTHENTICATED';
             return `<li class="resource-item alert-item ${priorityClass}">
-              <div>
-                <p class="alert-priority">${escapeHtml(priority)}</p>
-                <p class="trust-badge">${authenticated ? 'Authenticated alert' : 'Unverified alert'}</p>
+              <span class="resource-symbol alert-symbol" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9ZM9.5 21h5"></path></svg>
+              </span>
+              <div class="resource-copy">
+                <div class="resource-kicker">
+                  <p class="alert-priority">${escapeHtml(priority)}</p>
+                  <p class="trust-badge">${authenticated ? 'Authenticated' : 'Unverified'}</p>
+                </div>
                 <h3>${escapeHtml(alert.message)}</h3>
                 <p>${escapeHtml(alert.region && alert.region !== '-' ? alert.region : 'All regions')}</p>
               </div>
@@ -299,9 +324,15 @@
   }
 
   function renderHazardsPage(hazards, now = Date.now()) {
-    const records = Array.isArray(hazards) ? hazards : [];
+    const severityRank = { CRITICAL: 4, HIGH: 3, MEDIUM: 2, LOW: 1 };
+    const records = Array.isArray(hazards)
+      ? hazards.slice().sort((left, right) =>
+        (severityRank[right.severity] || 0) - (severityRank[left.severity] || 0) ||
+        (toMilliseconds(right.receivedAt) || 0) - (toMilliseconds(left.receivedAt) || 0)
+      )
+      : [];
     const body = records.length === 0
-      ? '<p class="empty-state">No current authenticated road hazards are available.</p>'
+      ? '<p class="empty-state">No hazard update has been received yet. Tap <strong>Get hazards</strong> in the SMS update panel to request one.</p>'
       : `<ul class="resource-list hazard-list">
           ${records.map((hazard) => {
             const authenticated =
@@ -309,12 +340,18 @@
             return `<li class="resource-item hazard-item priority-${escapeHtml(
               String(hazard.severity || 'UNKNOWN').toLowerCase()
             )}">
-              <div>
-                <p class="alert-priority">${escapeHtml(hazard.severity || 'UNKNOWN')}</p>
-                <p class="trust-badge">${authenticated ? 'Authenticated hazard' : 'Unverified hazard'}</p>
+              <span class="resource-symbol hazard-symbol" aria-hidden="true">
+                <svg viewBox="0 0 24 24"><path d="M12 3 2.5 20h19L12 3Zm0 6v5m0 3v.5"></path></svg>
+              </span>
+              <div class="resource-copy">
+                <div class="resource-kicker">
+                  <p class="alert-priority">${escapeHtml(hazard.severity || 'UNKNOWN')}</p>
+                  <p class="trust-badge">${authenticated ? 'Authenticated' : 'Unverified'}</p>
+                </div>
                 <h3>${escapeHtml(String(hazard.kind || 'HAZARD').replaceAll('_', ' '))}</h3>
-                <p>${escapeHtml(hazard.roadName || 'Unnamed road')}</p>
-                <p>${escapeHtml(`${hazard.radiusMeters || 0} m avoidance radius`)}</p>
+                <p class="resource-place">${escapeHtml(hazard.roadName || 'Unnamed road')}</p>
+                ${hazard.description ? `<p>${escapeHtml(hazard.description)}</p>` : ''}
+                <p class="resource-detail">${escapeHtml(`${hazard.radiusMeters || 0} m avoidance zone`)}</p>
               </div>
               ${renderFreshness(hazard.expiresAt, now)}
             </li>`;
@@ -430,26 +467,51 @@
         <button id="map-reset-view" type="button">Reset view</button>
       </div>
       </div>
+      <div id="map-route-banner" class="map-route-banner" role="status" aria-live="polite" hidden></div>
       </div>
       <div class="map-summary">
         <span>${markerRecords.length > 0 ? `${markerRecords.length} shelter markers` : 'No shelter markers'}</span>
         <span>${hazards.length} active hazard${hazards.length === 1 ? '' : 's'}</span>
       </div>
+      ${markerRecords.length === 0 ? `<section class="map-empty-state" aria-label="How to load safety information">
+        <div class="map-empty-symbol" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4V5Zm4 4h8M8 12h5"></path></svg>
+        </div>
+        <div>
+          <p class="eyebrow">Waiting for an SMS update</p>
+          <h3>Your map is ready. Safety data is not preloaded.</h3>
+          <p>Tap <strong>Get shelters</strong> above. The request goes by SMS to the gateway; authenticated shelter markers appear here when its response arrives.</p>
+        </div>
+      </section>` : ''}
       <p class="hazard-routing-note">${hazards.length > 0
         ? `${hazards.length} current hazard zone${hazards.length === 1 ? '' : 's'} loaded. Authenticated zones are excluded from route calculation.`
         : 'No current hazard zones are loaded; routes use the available road graph.'}</p>
       <div class="map-distance-panel">
-        <button id="map-locate" type="button">Use my location</button>
-        <p id="map-location-status" class="map-note">Allow location access to calculate straight-line distances.</p>
+        <div class="map-guidance">
+          <span class="map-guidance-step">1</span>
+          <p>Locate yourself, then SMSWeb compares reachable shelters using the bundled road network.</p>
+        </div>
+        <div class="map-action-row">
+          <button id="map-locate" type="button">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v3m0 14v3M2 12h3m14 0h3m-5 0a5 5 0 1 1-10 0 5 5 0 0 1 10 0Z"></path></svg>
+            <span class="button-label">Use my location</span>
+          </button>
+          <button id="map-route" type="button" data-route-allowed="${canRoute}" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20c0-7 12-5 12-12m0 0-3 3m3-3 3 3M6 4a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z"></path></svg>
+            <span class="button-label">Show fastest safe route</span>
+          </button>
+        </div>
+        <p id="map-location-status" class="map-action-status" role="status" aria-live="polite">Tap “Use my location” to find shelters reachable on mapped roads.</p>
         <ul id="map-distance-list" class="map-distance-list" aria-live="polite"></ul>
-        <button id="map-route" type="button"${canRoute ? '' : ' disabled'}>Find route to nearest open shelter</button>
-        <p id="map-route-status" class="map-note">${canRoute
-          ? 'Mirpur road coverage is bundled for route preview.'
+        <div id="map-route-result" class="map-route-result" data-state="idle">
+        <p id="map-route-status" class="map-action-status" role="status" aria-live="polite">${canRoute
+          ? 'The route button will unlock after your location and reachable road paths are ready.'
           : authenticated
             ? 'Routing is disabled until current shelter information with an expiry time is received.'
             : 'Routing is disabled because this shelter message was not authenticated by the gateway.'}</p>
         <p id="map-route-location" class="map-note"></p>
         <ul id="map-route-roads" class="map-route-roads" aria-live="polite"></ul>
+        </div>
         <p class="map-attribution">Road data: &copy; OpenStreetMap contributors</p>
       </div>
       <p class="map-selection" id="map-selection">Tap a marker to view shelter details.</p>
@@ -460,7 +522,7 @@
 
     return renderPageFrame({
       pageClass: 'page-view-map',
-      title: 'Crisis map',
+      title: 'Safety map',
       region: page.region || 'DHK',
       record: page,
       now,

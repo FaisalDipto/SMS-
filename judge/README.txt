@@ -13,10 +13,22 @@ an SMS plan, or a Raspberry Pi.
 
 Real two-phone demonstration
 See the root README.md in the source repository. It requires:
-- an Android gateway phone with the SMSWeb APK and active SIM;
-- a second phone to send requests;
+- SMSWeb-Gateway-debug.apk on an Android gateway phone with an active SIM;
+- SMSWeb-User-debug.apk on a second Android phone;
 - the Go service on a computer or Raspberry Pi on the gateway hotspot;
-- the same 16+ character authentication key on the service and gateway.
+- demo key "smsweb-local-judge-demo-key" on the service and gateway.
+
+The User APK is preconfigured for gateway number +8801701485658 and does not
+ask judges to select a role, enter a phone number, or type an authentication
+key. If a different gateway SIM is used, rebuild the User APK with the
+SMSWEB_USER_SERVICE_NUMBER Gradle property described in android-bridge/README.md.
+
+User APK quick look
+Install SMSWeb-User-debug.apk and grant SMS/location permissions. It opens
+directly on an interactive offline Greater Dhaka basemap with no preloaded
+emergency records. Tap Shelters, Alerts, and Hazards to demonstrate the real
+SMS request/response flow. The service's demo records appear only after the
+User phone receives and authenticates the gateway response.
 
 Safety limitation
 This prototype is not an emergency-service deployment. Real operation requires

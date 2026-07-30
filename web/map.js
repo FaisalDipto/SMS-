@@ -176,7 +176,7 @@
           source: 'route',
           paint: {
             'line-color': '#ffffff',
-            'line-width': 8,
+            'line-width': 11,
             'line-opacity': 0.95
           }
         },
@@ -185,8 +185,9 @@
           type: 'line',
           source: 'route',
           paint: {
-            'line-color': '#0759d7',
-            'line-width': 5
+            'line-color': '#0866e5',
+            'line-width': 7,
+            'line-opacity': 1
           },
           layout: {
             'line-cap': 'round',
@@ -350,6 +351,10 @@
         const instance = await ready;
         instance.getSource('route')?.setData(routeFeature(route));
         if (!route?.coordinates?.length) return;
+        instance.setLayoutProperty('smsweb-route-casing', 'visibility', 'visible');
+        instance.setLayoutProperty('smsweb-route', 'visibility', 'visible');
+        instance.moveLayer('smsweb-route-casing', 'smsweb-shelters');
+        instance.moveLayer('smsweb-route', 'smsweb-shelters');
 
         const bounds = route.coordinates.reduce(
           (result, coordinate) => result.extend([coordinate.longitude, coordinate.latitude]),
@@ -360,6 +365,10 @@
           maxZoom: 16,
           duration: 700
         });
+      },
+      async clearRoute() {
+        const instance = await ready;
+        instance.getSource('route')?.setData(EMPTY_COLLECTION);
       },
       destroy() {
         map.remove();

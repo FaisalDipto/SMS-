@@ -8,26 +8,20 @@ object GatewayConfig {
     private const val SERVICE_NUMBER = "service_number"
     private const val TRUSTED_SENDERS = "trusted_senders"
     private const val AUTHENTICATION_KEY = "authentication_key"
-    private const val APP_ROLE = "app_role"
     const val DEFAULT_PI_URL = "http://192.168.43.1:8080"
     const val ROLE_GATEWAY = "GATEWAY"
     const val ROLE_USER = "USER"
 
-    fun appRole(context: Context): String = context
-        .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        .getString(APP_ROLE, ROLE_GATEWAY)
-        .orEmpty()
-        .uppercase()
-        .let { if (it == ROLE_USER) ROLE_USER else ROLE_GATEWAY }
+    fun appRole(@Suppress("UNUSED_PARAMETER") context: Context): String = BuildConfig.APP_ROLE
 
-    fun saveAppRole(context: Context, value: String): String {
-        val role = if (value.trim().uppercase() == ROLE_USER) ROLE_USER else ROLE_GATEWAY
-        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-            .edit()
-            .putString(APP_ROLE, role)
-            .apply()
-        return role
-    }
+    fun saveAppRole(
+        @Suppress("UNUSED_PARAMETER") context: Context,
+        @Suppress("UNUSED_PARAMETER") value: String
+    ): String = BuildConfig.APP_ROLE
+
+    fun isRoleLocked(): Boolean = BuildConfig.ROLE_LOCKED
+
+    fun isUserEdition(): Boolean = BuildConfig.APP_ROLE == ROLE_USER
 
     fun piUrl(context: Context): String = context
         .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -44,11 +38,12 @@ object GatewayConfig {
 
     fun serviceNumber(context: Context): String = context
         .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        .getString(SERVICE_NUMBER, "")
+        .getString(SERVICE_NUMBER, BuildConfig.DEFAULT_SERVICE_NUMBER)
         .orEmpty()
         .trim()
 
     fun saveServiceNumber(context: Context, value: String) {
+        if (isUserEdition()) return
         context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
             .edit()
             .putString(SERVICE_NUMBER, value.trim())
@@ -61,10 +56,11 @@ object GatewayConfig {
 
     internal fun authenticationKey(context: Context): String = context
         .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
-        .getString(AUTHENTICATION_KEY, "")
+        .getString(AUTHENTICATION_KEY, BuildConfig.DEFAULT_AUTHENTICATION_KEY)
         .orEmpty()
 
     fun saveAuthenticationKey(context: Context, value: String): Boolean {
+        if (isUserEdition()) return false
         val normalized = value.trim()
         if (normalized.toByteArray(Charsets.UTF_8).size < MessageAuthenticator.MINIMUM_KEY_BYTES) {
             return false

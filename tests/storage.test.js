@@ -148,3 +148,34 @@ test('persists multipart response parts and completed-response markers', async (
   await storage.removeCompletedResponse(part.responseKey);
   assert.equal(await storage.getCompletedResponse(part.responseKey), undefined);
 });
+
+test('removes legacy records that were previously bundled in the User app', async () => {
+  const storage = createStorage();
+  const expiresAt = Date.now() + 60_000;
+
+  await storage.savePage({
+    pageId: 'SHELTER:DHK',
+    title: 'Bundled demo',
+    content: 'MIRPUR:23.8:90.3:120:OPEN',
+    transportSource: 'bundled-user-demo'
+  });
+  await storage.saveAlert({
+    alertId: 'DEMO-ALERT-MIRPUR',
+    message: 'Legacy bundled alert',
+    expiresAt
+  });
+  await storage.saveHazard({
+    hazardId: 'DEMO-HZD-MIRPUR',
+    kind: 'FLOOD',
+    latitude: 23.8,
+    longitude: 90.3,
+    radiusMeters: 100,
+    expiresAt
+  });
+
+  assert.equal(await storage.purgeLegacyBundledDemoData(), true);
+  assert.equal(await storage.getPage('SHELTER:DHK'), undefined);
+  assert.deepEqual(await storage.getActiveAlerts(), []);
+  assert.deepEqual(await storage.getActiveHazards(), []);
+  assert.equal(await storage.purgeLegacyBundledDemoData(), false);
+});
