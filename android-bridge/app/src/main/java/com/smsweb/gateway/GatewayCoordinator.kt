@@ -23,12 +23,15 @@ class GatewayCoordinator(private val context: Context) {
             try {
                 val response = pi.incoming(item.sender, item.text)
                 database.markForwarded(item.id)
-                database.enqueueToUser(response.recipient, response.text, item.subscriptionId)
-                context.sendBroadcast(Intent(GatewayEvents.ACTION_PI_RESPONSE).apply {
-                    setPackage(context.packageName)
-                    putExtra(GatewayEvents.EXTRA_REQUEST_ID, SmsProtocol.messageId(response.text))
-                    putExtra(GatewayEvents.EXTRA_TEXT, response.text)
-                })
+                response.messages.forEach { responseText ->
+                    if (database.enqueueToUser(response.recipient, responseText, item.subscriptionId)) {
+                        context.sendBroadcast(Intent(GatewayEvents.ACTION_PI_RESPONSE).apply {
+                            setPackage(context.packageName)
+                            putExtra(GatewayEvents.EXTRA_REQUEST_ID, SmsProtocol.messageId(responseText))
+                            putExtra(GatewayEvents.EXTRA_TEXT, responseText)
+                        })
+                    }
+                }
             } catch (_: Exception) {
                 database.markRetry(item.id)
                 retryNeeded = true
@@ -37,8 +40,11 @@ class GatewayCoordinator(private val context: Context) {
 
         database.pending("TO_USER").forEach { item ->
             try {
-                smsManager(item.subscriptionId)
-                    .sendTextMessage(item.recipient, null, item.text, null, null)
+                SmsTransport.send(
+                    smsManager(item.subscriptionId),
+                    item.recipient,
+                    item.text
+                )
                 database.markSent(item.id)
                 SmsProtocol.messageId(item.text)?.let { requestId ->
                     runCatching { pi.responseStatus(requestId, "sent") }

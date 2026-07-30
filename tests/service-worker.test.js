@@ -16,6 +16,7 @@ test('service worker caches every current application-shell asset', () => {
     './app.js',
     './protocol.js',
     './storage.js',
+    './multipart.js',
     './geo.js',
     './routing.js',
     './data/mirpur-road-graph.js',

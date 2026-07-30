@@ -2,7 +2,8 @@
   const simulator = factory({
     protocol: root?.SMSWeb?.protocol,
     storage: root?.SMSWeb?.storage,
-    renderer: root?.SMSWeb?.renderer
+    renderer: root?.SMSWeb?.renderer,
+    multipart: root?.SMSWeb?.multipart
   });
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -16,7 +17,7 @@
 })(typeof window !== 'undefined' ? window : globalThis, (dependencies) => {
   'use strict';
 
-  function createSimulator({ protocol, storage, renderer }) {
+  function createSimulator({ protocol, storage, renderer, multipart }) {
     async function handleSms(rawText, appView, now = Date.now(), source = 'simulator') {
       if (typeof rawText !== 'string' || rawText.trim() === '') {
         throw new Error('Paste an SMS message before parsing');
@@ -29,12 +30,27 @@
       const messageType = rawText.trim().split('|', 1)[0];
 
       if (messageType === 'RES') {
-        const response = protocol.parseResponse(rawText);
+        const parsedResponse = protocol.parseResponse(rawText);
+        const assembly = multipart?.accept
+          ? await multipart.accept(parsedResponse, rawText, now)
+          : { status: 'complete', response: parsedResponse, rawTexts: [rawText] };
 
+        if (assembly.status === 'duplicate') {
+          return `Duplicate response ${parsedResponse.requestId} ignored.`;
+        }
+        if (assembly.status === 'pending' || assembly.status === 'duplicate-part') {
+          const duplicateLabel = assembly.status === 'duplicate-part' ? ' Duplicate part ignored.' : '';
+          const expiredLabel = assembly.expiredPartCount > 0
+            ? ' Previous incomplete parts expired.'
+            : '';
+          return `Waiting for response ${parsedResponse.requestId}: received ${assembly.receivedParts} of ${assembly.totalParts}; missing part ${assembly.missingParts.join(', ')}.${duplicateLabel}${expiredLabel}`;
+        }
+
+        const response = assembly.response;
         await storage.saveMessage({
           requestId: response.requestId,
           direction: 'incoming',
-          rawText,
+          rawText: assembly.rawTexts.join('\n'),
           status: 'received',
           source,
           createdAt: now
@@ -60,6 +76,7 @@
 
         await storage.savePage(page);
         renderer.mount(appView, renderer.renderShelterPage(page, now));
+        await multipart?.complete?.(assembly.responseKey, now);
 
         return `Rendered ${response.page} response for ${response.region}`;
       }

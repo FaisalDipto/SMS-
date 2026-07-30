@@ -64,7 +64,7 @@ class GatewayWebBridge(
         }
 
         return try {
-            SmsManager.getDefault().sendTextMessage(recipient.trim(), null, text, null, null)
+            SmsTransport.send(SmsManager.getDefault(), recipient.trim(), text)
             "queued"
         } catch (_: SecurityException) {
             "permission-denied"

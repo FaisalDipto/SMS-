@@ -121,3 +121,30 @@ test('returns recent messages newest first', async () => {
 
   assert.deepEqual((await storage.getRecentMessages(1)).map((message) => message.requestId), ['NEW1']);
 });
+
+test('persists multipart response parts and completed-response markers', async () => {
+  const storage = createStorage();
+  const part = {
+    partKey: 'RES|1|PART1|SHELTER|DHK|1',
+    responseKey: 'RES|1|PART1|SHELTER|DHK',
+    partNumber: 1,
+    totalParts: 2,
+    payload: 'MIRPUR:120:OPEN',
+    receivedAt: 1_700_000_000_000
+  };
+
+  await storage.saveResponsePart(part);
+  assert.deepEqual(await storage.getResponsePart(part.partKey), part);
+  assert.ok((await storage.getAllResponseParts()).some((record) => record.partKey === part.partKey));
+  await storage.removeResponsePart(part.partKey);
+  assert.equal(await storage.getResponsePart(part.partKey), undefined);
+
+  const completed = {
+    responseKey: part.responseKey,
+    completedAt: 1_700_000_001_000
+  };
+  await storage.saveCompletedResponse(completed);
+  assert.deepEqual(await storage.getCompletedResponse(part.responseKey), completed);
+  await storage.removeCompletedResponse(part.responseKey);
+  assert.equal(await storage.getCompletedResponse(part.responseKey), undefined);
+});

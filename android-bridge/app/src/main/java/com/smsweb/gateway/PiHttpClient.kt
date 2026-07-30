@@ -6,7 +6,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
-data class PiResponse(val recipient: String, val text: String)
+data class PiResponse(val recipient: String, val messages: List<String>)
 
 class PiHttpClient(private val context: Context) {
     fun incoming(sender: String, text: String): PiResponse {
@@ -14,7 +14,14 @@ class PiHttpClient(private val context: Context) {
             put("sender", sender)
             put("text", text)
         })
-        return PiResponse(result.getString("recipient"), result.getString("text"))
+        val messages = if (result.has("messages") && !result.isNull("messages")) {
+            val values = result.getJSONArray("messages")
+            (0 until values.length()).map { index -> values.getString(index) }
+        } else {
+            listOf(result.getString("text"))
+        }.filter { it.isNotBlank() }
+        if (messages.isEmpty()) throw IOException("Pi returned no SMS response messages")
+        return PiResponse(result.getString("recipient"), messages)
     }
 
     fun responseStatus(requestId: String, status: String) {

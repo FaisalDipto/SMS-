@@ -15,12 +15,14 @@
   'use strict';
 
   const DB_NAME = 'smsweb';
-  const DB_VERSION = 1;
+  const DB_VERSION = 2;
   const STORES = Object.freeze({
     PAGES: 'pages',
     ALERTS: 'alerts',
     MESSAGES: 'messages',
-    SETTINGS: 'settings'
+    SETTINGS: 'settings',
+    RESPONSE_PARTS: 'responseParts',
+    COMPLETED_RESPONSES: 'completedResponses'
   });
 
   function storageError(message) {
@@ -64,6 +66,12 @@
 
         if (!database.objectStoreNames.contains(STORES.SETTINGS)) {
           database.createObjectStore(STORES.SETTINGS, { keyPath: 'settingName' });
+        }
+        if (!database.objectStoreNames.contains(STORES.RESPONSE_PARTS)) {
+          database.createObjectStore(STORES.RESPONSE_PARTS, { keyPath: 'partKey' });
+        }
+        if (!database.objectStoreNames.contains(STORES.COMPLETED_RESPONSES)) {
+          database.createObjectStore(STORES.COMPLETED_RESPONSES, { keyPath: 'responseKey' });
         }
       };
 
@@ -187,6 +195,43 @@
     });
   }
 
+  function saveResponsePart(part) {
+    requireRecord(part, 'part');
+    requireText(part.partKey, 'part.partKey');
+    requireText(part.responseKey, 'part.responseKey');
+    return runRequest(STORES.RESPONSE_PARTS, 'readwrite', (store) => store.put(part));
+  }
+
+  function getResponsePart(partKey) {
+    requireText(partKey, 'partKey');
+    return runRequest(STORES.RESPONSE_PARTS, 'readonly', (store) => store.get(partKey));
+  }
+
+  function getAllResponseParts() {
+    return runRequest(STORES.RESPONSE_PARTS, 'readonly', (store) => store.getAll());
+  }
+
+  function removeResponsePart(partKey) {
+    requireText(partKey, 'partKey');
+    return runRequest(STORES.RESPONSE_PARTS, 'readwrite', (store) => store.delete(partKey));
+  }
+
+  function saveCompletedResponse(response) {
+    requireRecord(response, 'response');
+    requireText(response.responseKey, 'response.responseKey');
+    return runRequest(STORES.COMPLETED_RESPONSES, 'readwrite', (store) => store.put(response));
+  }
+
+  function getCompletedResponse(responseKey) {
+    requireText(responseKey, 'responseKey');
+    return runRequest(STORES.COMPLETED_RESPONSES, 'readonly', (store) => store.get(responseKey));
+  }
+
+  function removeCompletedResponse(responseKey) {
+    requireText(responseKey, 'responseKey');
+    return runRequest(STORES.COMPLETED_RESPONSES, 'readwrite', (store) => store.delete(responseKey));
+  }
+
   return {
     DB_NAME,
     DB_VERSION,
@@ -198,6 +243,13 @@
     getPage,
     getActiveAlerts,
     getRecentMessages,
-    queueRequest
+    queueRequest,
+    saveResponsePart,
+    getResponsePart,
+    getAllResponseParts,
+    removeResponsePart,
+    saveCompletedResponse,
+    getCompletedResponse,
+    removeCompletedResponse
   };
 });

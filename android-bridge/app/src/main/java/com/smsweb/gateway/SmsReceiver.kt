@@ -17,11 +17,16 @@ class SmsReceiver : BroadcastReceiver() {
                     SubscriptionManager.EXTRA_SUBSCRIPTION_INDEX,
                     SubscriptionManager.INVALID_SUBSCRIPTION_ID
                 )
-                for (message in Telephony.Sms.Intents.getMessagesFromIntent(intent)) {
+                val messagesBySender = Telephony.Sms.Intents.getMessagesFromIntent(intent)
+                    .groupBy { message -> message.originatingAddress.orEmpty() }
+                for ((sender, messages) in messagesBySender) {
+                    val completeText = messages.joinToString(separator = "") { message ->
+                        message.messageBody.orEmpty()
+                    }
                     GatewayCoordinator(context.applicationContext)
                         .acceptIncomingSms(
-                            message.originatingAddress.orEmpty(),
-                            message.messageBody,
+                            sender,
+                            completeText,
                             subscriptionId
                         )
                 }

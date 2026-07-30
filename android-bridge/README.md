@@ -19,6 +19,15 @@ The phone receives `REQ|...` SMS messages, validates their format, queues them, 
 
 The WebView package includes the offline dashboard shell and a native bridge for saving the Pi URL, checking the local `/health` endpoint, and rendering structured responses received from the Pi. Responses are retained in the native queue until the dashboard confirms that they were stored offline, so closing the app does not lose information.
 
+Long responses use two levels of protection. The Go service returns numbered
+protocol messages, Android queues each one, and `SmsManager` handles any
+additional carrier-level segmentation. The offline dashboard persists numbered
+parts in IndexedDB, reassembles out-of-order delivery, ignores duplicates, and
+waits up to ten minutes for missing parts before discarding an incomplete
+assembly.
+
 The app uses cleartext HTTP because the Pi endpoint is on the private hotspot network. Do not expose this endpoint directly to the public internet.
 
-The current workspace does not have Java, Gradle, or an Android SDK installed, so Android compilation must be performed from Android Studio or another machine with the Android toolchain.
+Android compilation uses Android Studio's bundled JDK and the Gradle wrapper.
+The project can be run from Android Studio or built from a terminal after
+`JAVA_HOME` points to Android Studio's `jbr` directory.

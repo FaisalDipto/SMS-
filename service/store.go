@@ -218,7 +218,7 @@ VALUES (?, ?, ?, ?, ?)
 func (store *Store) UpdateMessageStatus(requestID, status string) error {
 	result, err := store.db.Exec(`
 UPDATE messages SET status = ?
-WHERE id = (SELECT id FROM messages WHERE request_id = ? ORDER BY id DESC LIMIT 1)
+WHERE request_id = ? AND direction = 'outgoing'
 `, status, requestID)
 	if err != nil {
 		return err

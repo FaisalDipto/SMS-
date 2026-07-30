@@ -41,6 +41,16 @@ class FakeObjectStore {
     });
     return request;
   }
+
+  delete(key) {
+    const request = new FakeRequest();
+    queueMicrotask(() => {
+      this.records.delete(key);
+      request.result = undefined;
+      request.onsuccess?.();
+    });
+    return request;
+  }
 }
 
 class FakeDatabase {

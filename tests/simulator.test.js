@@ -70,3 +70,26 @@ test('rejects an empty simulator message', async () => {
 
   await assert.rejects(instance.handleSms('  ', {}), /Paste an SMS message/);
 });
+
+test('reports missing multipart responses without rendering partial data', async () => {
+  const { dependencies, calls } = createDependencies();
+  dependencies.multipart = {
+    accept: async () => ({
+      status: 'pending',
+      receivedParts: 1,
+      totalParts: 2,
+      missingParts: [2],
+      expiredPartCount: 0
+    })
+  };
+  const instance = simulator.createSimulator(dependencies);
+
+  const result = await instance.handleSms(
+    'RES|1|A17K|SHELTER|1/2|DHK|MIRPUR:120:OPEN',
+    {},
+    1_700_000_000_000
+  );
+
+  assert.match(result, /received 1 of 2; missing part 2/);
+  assert.deepEqual(calls, []);
+});

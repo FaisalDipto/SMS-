@@ -11,6 +11,7 @@ const protocolVersion = "1"
 
 var identifierPattern = regexp.MustCompile(`^[A-Z0-9]{2,16}$`)
 var regionPattern = regexp.MustCompile(`^[A-Z0-9_-]{1,12}$`)
+var responsePartPattern = regexp.MustCompile(`^([1-9][0-9]*)/([1-9][0-9]*)$`)
 
 var allowedCommands = map[string]bool{
 	"HOME":    true,
@@ -140,7 +141,7 @@ func validateResponseMetadata(metadata ResponseMetadata) error {
 	return nil
 }
 
-func SerializeResponse(requestID, page, region, payload string, metadata ...ResponseMetadata) (string, error) {
+func serializeResponsePart(requestID, page, part, region, payload string, metadata ...ResponseMetadata) (string, error) {
 	if !identifierPattern.MatchString(requestID) {
 		return "", fmt.Errorf("invalid request ID")
 	}
@@ -150,13 +151,22 @@ func SerializeResponse(requestID, page, region, payload string, metadata ...Resp
 	if err := validateRegion(region); err != nil {
 		return "", err
 	}
+	partMatch := responsePartPattern.FindStringSubmatch(part)
+	if len(partMatch) != 3 {
+		return "", fmt.Errorf("response part must use PART/TOTAL")
+	}
+	partNumber, _ := strconv.Atoi(partMatch[1])
+	totalParts, _ := strconv.Atoi(partMatch[2])
+	if partNumber > totalParts {
+		return "", fmt.Errorf("response part cannot exceed total")
+	}
 
 	fields := []string{
 		"RES",
 		protocolVersion,
 		requestID,
 		page,
-		"1/1",
+		part,
 		region,
 	}
 	if len(metadata) > 1 {
@@ -178,6 +188,62 @@ func SerializeResponse(requestID, page, region, payload string, metadata ...Resp
 		fields[index] = escapeField(fields[index])
 	}
 	return strings.Join(fields, "|"), nil
+}
+
+func SerializeResponse(requestID, page, region, payload string, metadata ...ResponseMetadata) (string, error) {
+	return serializeResponsePart(requestID, page, "1/1", region, payload, metadata...)
+}
+
+func SerializeResponseParts(
+	requestID,
+	page,
+	region,
+	payload string,
+	maxPayloadCharacters int,
+	metadata ...ResponseMetadata,
+) ([]string, error) {
+	if maxPayloadCharacters <= 0 {
+		return nil, fmt.Errorf("maximum payload characters must be positive")
+	}
+	if payload == "" {
+		message, err := SerializeResponse(requestID, page, region, payload, metadata...)
+		return []string{message}, err
+	}
+
+	records := strings.Split(payload, ";")
+	chunks := make([]string, 0, len(records))
+	current := ""
+	for _, record := range records {
+		if record == "" {
+			return nil, fmt.Errorf("response payload contains an empty record")
+		}
+		candidate := record
+		if current != "" {
+			candidate = current + ";" + record
+		}
+		if len(candidate) <= maxPayloadCharacters {
+			current = candidate
+			continue
+		}
+		if current != "" {
+			chunks = append(chunks, current)
+		}
+		current = record
+	}
+	if current != "" {
+		chunks = append(chunks, current)
+	}
+
+	messages := make([]string, 0, len(chunks))
+	for index, chunk := range chunks {
+		part := fmt.Sprintf("%d/%d", index+1, len(chunks))
+		message, err := serializeResponsePart(requestID, page, part, region, chunk, metadata...)
+		if err != nil {
+			return nil, err
+		}
+		messages = append(messages, message)
+	}
+	return messages, nil
 }
 
 func SerializeError(requestID, code, message string) string {

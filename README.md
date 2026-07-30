@@ -534,9 +534,17 @@ Example response returned to the Android gateway:
 ```json
 {
   "recipient": "+8801XXXXXXXXX",
-  "text": "RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:23.8069:90.3687:120:OPEN"
+  "text": "RES|1|A17K|SHELTER|1/2|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|DU:23.7271:90.3944:0:FULL",
+  "messages": [
+    "RES|1|A17K|SHELTER|1/2|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|DU:23.7271:90.3944:0:FULL",
+    "RES|1|A17K|SHELTER|2/2|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:23.8069:90.3687:120:OPEN"
+  ]
 }
 ```
+
+`text` retains the first message for simple gateway compatibility. Current
+gateways must use the ordered `messages` array so every numbered response is
+queued and delivered.
 
 Example command flow:
 
@@ -609,6 +617,21 @@ The PWA should:
 - Wait until all parts arrive.
 - Reassemble them in order.
 - Reject incomplete data after a timeout.
+
+Current implementation:
+
+- The Go service keeps shelter records intact and creates compact numbered
+  protocol messages with a maximum 60-character payload per message.
+- Android queues every protocol message separately and uses
+  `SmsManager.divideMessage()` plus multipart transmission when the carrier
+  still needs to segment one message.
+- Incoming carrier segments from the same broadcast and sender are concatenated
+  before request validation.
+- The PWA stores numbered response parts in IndexedDB, accepts out-of-order
+  delivery, ignores exact duplicate parts, rejects conflicting parts, and
+  renders only after every part is present.
+- Incomplete assemblies expire after ten minutes. Completed response IDs remain
+  deduplicated for 24 hours.
 
 ### Step 12: Add security
 

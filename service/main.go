@@ -21,8 +21,9 @@ type incomingSMS struct {
 }
 
 type gatewayResponse struct {
-	Recipient string `json:"recipient"`
-	Text      string `json:"text"`
+	Recipient string   `json:"recipient"`
+	Text      string   `json:"text"`
+	Messages  []string `json:"messages"`
 }
 
 type responseStatus struct {
@@ -75,25 +76,28 @@ func (server *Server) incoming(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	responseText, err := server.createResponse(parsedRequest)
+	responseTexts, err := server.createResponses(parsedRequest)
 	if err != nil {
-		responseText = SerializeError(parsedRequest.RequestID, "SERVICE_ERROR", err.Error())
+		responseTexts = []string{SerializeError(parsedRequest.RequestID, "SERVICE_ERROR", err.Error())}
 	}
 
-	if err := server.store.SaveMessage(Message{
-		RequestID: parsedRequest.RequestID,
-		Direction: "outgoing",
-		RawText:   responseText,
-		Status:    "queued",
-		CreatedAt: now,
-	}); err != nil {
-		writeError(response, http.StatusInternalServerError, err)
-		return
+	for _, responseText := range responseTexts {
+		if err := server.store.SaveMessage(Message{
+			RequestID: parsedRequest.RequestID,
+			Direction: "outgoing",
+			RawText:   responseText,
+			Status:    "queued",
+			CreatedAt: now,
+		}); err != nil {
+			writeError(response, http.StatusInternalServerError, err)
+			return
+		}
 	}
 
 	writeJSON(response, http.StatusOK, gatewayResponse{
 		Recipient: payload.Sender,
-		Text:      responseText,
+		Text:      responseTexts[0],
+		Messages:  responseTexts,
 	})
 }
 
@@ -119,16 +123,16 @@ func (server *Server) response(response http.ResponseWriter, request *http.Reque
 	writeJSON(response, http.StatusOK, map[string]string{"status": payload.Status})
 }
 
-func (server *Server) createResponse(request Request) (string, error) {
+func (server *Server) createResponses(request Request) ([]string, error) {
 	switch request.Command {
 	case "SHELTER":
 		region, err := parseShelterRegion(request.Arguments)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		shelters, err := server.store.FindShelters(region)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		records := make([]string, 0, len(shelters))
@@ -143,35 +147,39 @@ func (server *Server) createResponse(request Request) (string, error) {
 		}
 		metadata, err := shelterResponseMetadata(shelters)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
-		return SerializeResponse(
+		return SerializeResponseParts(
 			request.RequestID,
 			"SHELTER",
 			region,
 			strings.Join(records, ";"),
+			60,
 			metadata,
 		)
 	case "HOME":
-		return SerializeResponse(request.RequestID, "HOME", "-", "SMSWeb crisis service")
+		response, err := SerializeResponse(request.RequestID, "HOME", "-", "SMSWeb crisis service")
+		return []string{response}, err
 	case "HELP":
-		return SerializeResponse(request.RequestID, "HELP", "-", "HOME;SHELTER;MED;ROAD;REPORT;HELP;ALERT")
+		response, err := SerializeResponse(request.RequestID, "HELP", "-", "HOME;SHELTER;MED;ROAD;REPORT;HELP;ALERT")
+		return []string{response}, err
 	case "ALERT":
 		region, err := parseShelterRegion(request.Arguments)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		alerts, err := server.store.FindActiveAlerts(region, time.Now().UTC())
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		if len(alerts) == 0 {
-			return SerializeError(request.RequestID, "NO_ALERTS", "No active alerts are available"), nil
+			return []string{SerializeError(request.RequestID, "NO_ALERTS", "No active alerts are available")}, nil
 		}
 		alert := alerts[0]
-		return SerializeAlert(alert.AlertID, alert.Priority, alert.Expires, alert.Region, alert.Message)
+		response, err := SerializeAlert(alert.AlertID, alert.Priority, alert.Expires, alert.Region, alert.Message)
+		return []string{response}, err
 	default:
-		return SerializeError(request.RequestID, "NOT_IMPLEMENTED", fmt.Sprintf("command %s is not implemented", request.Command)), nil
+		return []string{SerializeError(request.RequestID, "NOT_IMPLEMENTED", fmt.Sprintf("command %s is not implemented", request.Command))}, nil
 	}
 }
 

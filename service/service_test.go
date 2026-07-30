@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -64,24 +65,42 @@ func TestIncomingShelterRequest(t *testing.T) {
 	if gateway.Recipient != "+8801712345678" {
 		t.Fatalf("unexpected recipient: %s", gateway.Recipient)
 	}
-	if !strings.HasPrefix(gateway.Text, "RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|") {
-		t.Fatalf("unexpected response text: %s", gateway.Text)
+	if len(gateway.Messages) != 2 {
+		t.Fatalf("expected two protocol parts, got %d: %#v", len(gateway.Messages), gateway.Messages)
 	}
-	if !strings.HasSuffix(gateway.Text, "|DU:23.7271:90.3944:0:FULL;MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN") {
-		t.Fatalf("unexpected shelter payload: %s", gateway.Text)
+	if gateway.Text != gateway.Messages[0] {
+		t.Fatalf("legacy text field should contain the first part")
 	}
-	fields, err := splitFields(gateway.Text)
+	var payloadParts []string
+	var firstFields []string
+	for index, message := range gateway.Messages {
+		if len(message) > 153 {
+			t.Fatalf("protocol message %d exceeds concatenated GSM segment size: %d", index+1, len(message))
+		}
+		fields, err := splitFields(message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fields) != 11 {
+			t.Fatalf("expected metadata response fields, got %d", len(fields))
+		}
+		expectedPart := fmt.Sprintf("%d/%d", index+1, len(gateway.Messages))
+		if fields[4] != expectedPart {
+			t.Fatalf("expected part %s, got %s", expectedPart, fields[4])
+		}
+		if index == 0 {
+			firstFields = fields
+		}
+		payloadParts = append(payloadParts, fields[10])
+	}
+	if strings.Join(payloadParts, ";") != "DU:23.7271:90.3944:0:FULL;MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN" {
+		t.Fatalf("unexpected reconstructed shelter payload: %s", strings.Join(payloadParts, ";"))
+	}
+	verifiedAt, err := strconv.ParseInt(firstFields[8], 10, 64)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(fields) != 11 {
-		t.Fatalf("expected metadata response fields, got %d", len(fields))
-	}
-	verifiedAt, err := strconv.ParseInt(fields[8], 10, 64)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expiresAt, err := strconv.ParseInt(fields[9], 10, 64)
+	expiresAt, err := strconv.ParseInt(firstFields[9], 10, 64)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -93,8 +112,44 @@ func TestIncomingShelterRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if count != 2 {
-		t.Fatalf("expected incoming and outgoing messages, got %d", count)
+	if count != 3 {
+		t.Fatalf("expected one incoming and two outgoing messages, got %d", count)
+	}
+}
+
+func TestResponsePaginationRejectsInvalidPartsAndKeepsRecordsWhole(t *testing.T) {
+	metadata := ResponseMetadata{
+		Trust: "DEMO", Source: "SMSWEB_DEMO", VerifiedAt: 100, ExpiresAt: 200,
+	}
+	messages, err := SerializeResponseParts(
+		"A17K",
+		"SHELTER",
+		"DHK",
+		"FIRST:1:OPEN;SECOND:2:OPEN;THIRD:3:OPEN",
+		20,
+		metadata,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 3 {
+		t.Fatalf("expected three record-aligned parts, got %d", len(messages))
+	}
+	for index, message := range messages {
+		fields, err := splitFields(message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fields[4] != fmt.Sprintf("%d/3", index+1) {
+			t.Fatalf("unexpected pagination in %s", message)
+		}
+		if strings.Contains(fields[10], ";") {
+			t.Fatalf("expected each record to remain whole, got %s", fields[10])
+		}
+	}
+
+	if _, err := serializeResponsePart("A17K", "SHELTER", "3/2", "DHK", "x"); err == nil {
+		t.Fatal("expected invalid part numbering to fail")
 	}
 }
 
