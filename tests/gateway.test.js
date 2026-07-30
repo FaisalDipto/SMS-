@@ -300,3 +300,44 @@ test('stores the authentication key through the native-only bridge', () => {
   assert.equal(replaceAuthenticationKeyButton.hidden, true);
   assert.match(authenticationStatus.textContent, /replacement/i);
 });
+
+test('starts a call sequence through the native bridge using the command mapping', () => {
+  const started = [];
+  const instance = gateway.createGateway({
+    getCallCommandMapping: () => JSON.stringify({ SHELTER: 1, ALERT: 2, HAZARD: 3 }),
+    startCallSequence: (recipient, totalCalls) => {
+      started.push([recipient, totalCalls]);
+      return 'started';
+    }
+  });
+  const callStatus = element();
+  instance.initialize({ callStatusElement: callStatus });
+
+  instance.startCallSequence('+8801700000000', 'ALERT');
+
+  assert.deepEqual(started, [['+8801700000000', 2]]);
+  assert.match(callStatus.textContent, /call 1 of 2/i);
+
+  instance.receiveCallProgress(2, 2);
+  assert.match(callStatus.textContent, /call 2 of 2/i);
+
+  instance.receiveCallSequenceDone();
+  assert.match(callStatus.textContent, /complete/i);
+});
+
+test('reports permission-denied and missing-bridge outcomes for call sequences', () => {
+  const deniedInstance = gateway.createGateway({
+    getCallCommandMapping: () => JSON.stringify({ SHELTER: 1 }),
+    startCallSequence: () => 'permission-denied'
+  });
+  const deniedStatus = element();
+  deniedInstance.initialize({ callStatusElement: deniedStatus });
+  deniedInstance.startCallSequence('+8801700000000', 'SHELTER');
+  assert.match(deniedStatus.textContent, /permission is not granted/i);
+
+  const noBridgeInstance = gateway.createGateway(null);
+  const noBridgeStatus = element();
+  noBridgeInstance.initialize({ callStatusElement: noBridgeStatus });
+  noBridgeInstance.startCallSequence('+8801700000000', 'SHELTER');
+  assert.match(noBridgeStatus.textContent, /available in the Android app/i);
+});

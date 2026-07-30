@@ -35,6 +35,10 @@
     roleRoot: document.body,
     gatewayEyebrow: document.querySelector('#gateway-eyebrow'),
     gatewayTitle: document.querySelector('#gateway-title'),
+    callShelterButton: document.querySelector('#call-shelter'),
+    callAlertButton: document.querySelector('#call-alert'),
+    callHazardButton: document.querySelector('#call-hazard'),
+    callStatusElement: document.querySelector('#call-status'),
     onRequest: async (request) => {
       await window.SMSWeb.storage.saveMessage({
         requestId: request.requestId,
@@ -63,7 +67,10 @@
         const residentLabels = [
           ['#request-shelters', 'Get shelters'],
           ['#request-alerts', 'Get alerts'],
-          ['#request-hazards', 'Get hazards']
+          ['#request-hazards', 'Get hazards'],
+          ['#call-shelter', 'Call for shelters'],
+          ['#call-alert', 'Call for alerts'],
+          ['#call-hazard', 'Call for hazards']
         ];
         residentLabels.forEach(([selector, label]) => {
           const button = requestActions.querySelector(selector);

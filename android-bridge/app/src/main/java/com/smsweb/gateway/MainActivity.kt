@@ -133,9 +133,15 @@ class MainActivity : Activity() {
                 Manifest.permission.READ_SMS,
                 Manifest.permission.SEND_SMS
             )
-            if (GatewayConfig.appRole(this) == GatewayConfig.ROLE_GATEWAY) {
-                permissions.add(Manifest.permission.READ_PHONE_STATE)
-                permissions.add(Manifest.permission.READ_CALL_LOG)
+            when (GatewayConfig.appRole(this)) {
+                GatewayConfig.ROLE_GATEWAY -> {
+                    permissions.add(Manifest.permission.READ_PHONE_STATE)
+                    permissions.add(Manifest.permission.READ_CALL_LOG)
+                }
+                GatewayConfig.ROLE_USER -> {
+                    permissions.add(Manifest.permission.READ_PHONE_STATE)
+                    permissions.add(Manifest.permission.CALL_PHONE)
+                }
             }
             requestPermissions(permissions.toTypedArray(), 100)
         }
