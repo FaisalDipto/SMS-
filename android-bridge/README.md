@@ -11,9 +11,10 @@ The phone receives `REQ|...` SMS messages, validates their format, queues them, 
 3. Grant SMS permissions when the app starts.
 4. Start the Go service with `SMSWEB_AUTH_KEY` set to a private value containing
    at least 16 characters.
-5. In the dashboard, enter that exact value under **Shared response
-   authentication key** and tap **Save authentication key**. The value is not
-   displayed again.
+5. Open **Administrator setup** in the dashboard, enter that exact value under
+   **Shared response authentication key**, and tap **Provision authentication
+   key**. The controls then lock and collapse; ordinary users see only the
+   **Protected** security status. The value is not displayed again.
 6. Set the Raspberry Pi URL, for example `http://192.168.43.1:8080`, and tap
    **Save URL**.
 7. Tap **Check connection** while the Go service is running.

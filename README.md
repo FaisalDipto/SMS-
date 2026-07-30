@@ -659,8 +659,9 @@ Current prototype security implementation:
   future-dated records, and blocks repeated authentication tags before a
   response can be stored, rendered, or sent by SMS.
 - The shared key is stored in Android app-private preferences and is never
-  returned to the WebView. The dashboard receives only the result
-  `AUTHENTICATED` or a security rejection.
+  returned to the WebView. It is provisioned once from the collapsed
+  administrator setup panel; ordinary users see only the security status. The
+  dashboard receives only the result `AUTHENTICATED` or a security rejection.
 - Current-but-unauthenticated data remains non-routable. The developer
   simulator deliberately labels manually pasted content as unverified.
 

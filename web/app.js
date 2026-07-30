@@ -22,6 +22,10 @@
     authenticationKeyInput: document.querySelector('#authentication-key'),
     saveAuthenticationKeyButton: document.querySelector('#save-authentication-key'),
     authenticationStatusElement: document.querySelector('#authentication-status'),
+    authenticationBadgeElement: document.querySelector('#authentication-badge'),
+    authenticationKeyControls: document.querySelector('#authentication-key-controls'),
+    replaceAuthenticationKeyButton: document.querySelector('#replace-authentication-key'),
+    administratorSetup: document.querySelector('#administrator-setup'),
     onRequest: async (request) => {
       await window.SMSWeb.storage.saveMessage({
         requestId: request.requestId,

@@ -32,24 +32,45 @@
           </div>
           <span id="gateway-connection-badge" class="connection-badge connection-unknown">Not checked</span>
         </div>
-        <label for="pi-url">Raspberry Pi local URL</label>
-        <input id="pi-url" type="url" inputmode="url" placeholder="http://192.168.43.1:8080" />
-        <div class="gateway-actions">
-          <button id="save-pi-url" type="button">Save URL</button>
-          <button id="check-pi-connection" type="button">Check connection</button>
-          <p id="gateway-status" role="status" aria-live="polite"></p>
+        <div class="security-summary" aria-label="Response security status">
+          <div>
+            <strong>Response security</strong>
+            <p id="authentication-status" role="status" aria-live="polite">Checking configuration...</p>
+          </div>
+          <span id="authentication-badge" class="security-badge security-unknown">Checking</span>
         </div>
-        <label for="authentication-key">Shared response authentication key</label>
-        <input id="authentication-key" type="password" autocomplete="off"
-          placeholder="Same key as SMSWEB_AUTH_KEY" />
-        <div class="gateway-actions">
-          <button id="save-authentication-key" type="button">Save authentication key</button>
-          <p id="authentication-status" role="status" aria-live="polite"></p>
-        </div>
-        <label for="service-number">Gateway SMS number</label>
-        <input id="service-number" type="tel" inputmode="tel" placeholder="+8801XXXXXXXXX" />
-        <div class="gateway-actions">
-          <button id="save-service-number" type="button">Save number</button>
+
+        <details id="administrator-setup" class="administrator-setup">
+          <summary>Administrator setup</summary>
+          <p class="administrator-note">
+            These settings are configured once by the deployment operator, not by people requesting crisis information.
+          </p>
+          <label for="pi-url">Raspberry Pi local URL</label>
+          <input id="pi-url" type="url" inputmode="url" placeholder="http://192.168.43.1:8080" />
+          <div class="gateway-actions">
+            <button id="save-pi-url" type="button">Save URL</button>
+            <button id="check-pi-connection" type="button">Check connection</button>
+            <p id="gateway-status" role="status" aria-live="polite"></p>
+          </div>
+          <div id="authentication-key-controls">
+            <label for="authentication-key">Shared response authentication key</label>
+            <input id="authentication-key" type="password" autocomplete="off"
+              placeholder="Same key as SMSWEB_AUTH_KEY" />
+            <div class="gateway-actions">
+              <button id="save-authentication-key" type="button">Provision authentication key</button>
+            </div>
+          </div>
+          <button id="replace-authentication-key" class="secondary-action" type="button" hidden>
+            Replace authentication key
+          </button>
+          <label for="service-number">Gateway SMS number</label>
+          <input id="service-number" type="tel" inputmode="tel" placeholder="+8801XXXXXXXXX" />
+          <div class="gateway-actions">
+            <button id="save-service-number" type="button">Save number</button>
+          </div>
+        </details>
+
+        <div class="gateway-actions request-actions">
           <button id="request-shelters" type="button">Request shelters</button>
           <button id="request-alerts" type="button">Request alerts</button>
           <p id="request-status" role="status" aria-live="polite"></p>

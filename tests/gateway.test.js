@@ -10,6 +10,8 @@ function element(initial = {}) {
     textContent: initial.textContent || '',
     value: initial.value || '',
     disabled: false,
+    hidden: false,
+    open: false,
     listeners: {},
     addEventListener(name, callback) {
       this.listeners[name] = callback;
@@ -41,6 +43,10 @@ test('loads and saves the native Pi URL', () => {
   const authenticationKeyInput = element();
   const saveAuthenticationKeyButton = element();
   const authenticationStatus = element();
+  const authenticationBadge = element();
+  const authenticationKeyControls = element();
+  const replaceAuthenticationKeyButton = element();
+  const administratorSetup = element();
 
   instance.initialize({
     urlInput,
@@ -55,7 +61,11 @@ test('loads and saves the native Pi URL', () => {
     requestStatusElement: requestStatus,
     authenticationKeyInput,
     saveAuthenticationKeyButton,
-    authenticationStatusElement: authenticationStatus
+    authenticationStatusElement: authenticationStatus,
+    authenticationBadgeElement: authenticationBadge,
+    authenticationKeyControls,
+    replaceAuthenticationKeyButton,
+    administratorSetup
   });
 
   assert.equal(urlInput.value, 'http://192.168.0.103:8080');
@@ -83,7 +93,11 @@ test('updates the badge when the native health result arrives', () => {
     requestStatusElement: element(),
     authenticationKeyInput: element(),
     saveAuthenticationKeyButton: element(),
-    authenticationStatusElement: element()
+    authenticationStatusElement: element(),
+    authenticationBadgeElement: element(),
+    authenticationKeyControls: element(),
+    replaceAuthenticationKeyButton: element(),
+    administratorSetup: element()
   });
   instance.receiveConnectionStatus(true);
 
@@ -179,6 +193,10 @@ test('stores the authentication key through the native-only bridge', () => {
   const authenticationKeyInput = element();
   const saveAuthenticationKeyButton = element();
   const authenticationStatus = element();
+  const authenticationBadge = element();
+  const authenticationKeyControls = element();
+  const replaceAuthenticationKeyButton = element();
+  const administratorSetup = element();
 
   instance.initialize({
     urlInput: element(),
@@ -193,13 +211,28 @@ test('stores the authentication key through the native-only bridge', () => {
     requestStatusElement: element(),
     authenticationKeyInput,
     saveAuthenticationKeyButton,
-    authenticationStatusElement: authenticationStatus
+    authenticationStatusElement: authenticationStatus,
+    authenticationBadgeElement: authenticationBadge,
+    authenticationKeyControls,
+    replaceAuthenticationKeyButton,
+    administratorSetup
   });
 
-  assert.match(authenticationStatus.textContent, /missing/i);
+  assert.match(authenticationStatus.textContent, /provisioning/i);
+  assert.equal(authenticationBadge.textContent, 'Setup required');
+  assert.equal(administratorSetup.open, true);
   authenticationKeyInput.value = 'smsweb-demo-key-2026';
   saveAuthenticationKeyButton.listeners.click();
   assert.deepEqual(saved, ['smsweb-demo-key-2026']);
   assert.equal(authenticationKeyInput.value, '');
-  assert.match(authenticationStatus.textContent, /saved/i);
+  assert.match(authenticationStatus.textContent, /verified/i);
+  assert.equal(authenticationBadge.textContent, 'Protected');
+  assert.equal(authenticationKeyControls.hidden, true);
+  assert.equal(replaceAuthenticationKeyButton.hidden, false);
+  assert.equal(administratorSetup.open, false);
+
+  replaceAuthenticationKeyButton.listeners.click();
+  assert.equal(authenticationKeyControls.hidden, false);
+  assert.equal(replaceAuthenticationKeyButton.hidden, true);
+  assert.match(authenticationStatus.textContent, /replacement/i);
 });
