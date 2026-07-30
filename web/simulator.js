@@ -3,7 +3,8 @@
     protocol: root?.SMSWeb?.protocol,
     storage: root?.SMSWeb?.storage,
     renderer: root?.SMSWeb?.renderer,
-    multipart: root?.SMSWeb?.multipart
+    multipart: root?.SMSWeb?.multipart,
+    hazards: root?.SMSWeb?.hazards
   });
 
   if (typeof module !== 'undefined' && module.exports) {
@@ -17,7 +18,7 @@
 })(typeof window !== 'undefined' ? window : globalThis, (dependencies) => {
   'use strict';
 
-  function createSimulator({ protocol, storage, renderer, multipart }) {
+  function createSimulator({ protocol, storage, renderer, multipart, hazards }) {
     async function handleSms(
       rawText,
       appView,
@@ -61,6 +62,26 @@
           source,
           createdAt: now
         });
+
+        if (response.page === 'HAZARD') {
+          if (!hazards?.parseHazardPayload || !storage.saveHazards) {
+            throw new Error('Hazard support is unavailable');
+          }
+          const records = hazards.parseHazardPayload(response.payload).map((hazard) => ({
+            ...hazard,
+            region: response.region,
+            source: response.source || source,
+            trust: response.trust || 'UNVERIFIED',
+            authentication,
+            verifiedAt: response.verifiedAt ? response.verifiedAt * 1_000 : undefined,
+            expiresAt: response.expiresAt ? response.expiresAt * 1_000 : undefined,
+            receivedAt: now
+          }));
+          await storage.saveHazards(records);
+          renderer.mount(appView, renderer.renderHazardsPage(records, now));
+          await multipart?.complete?.(assembly.responseKey, now);
+          return `Rendered ${records.length} active hazard${records.length === 1 ? '' : 's'} for ${response.region}`;
+        }
 
         if (response.page !== 'SHELTER') {
           throw new Error(`Simulator rendering is not implemented for ${response.page} yet`);

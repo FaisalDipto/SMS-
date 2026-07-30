@@ -4,7 +4,10 @@ coverage/
 service/*.db
 service/*.db-*
 service/*.exe
+/smsweb.db
+/smsweb.db-*
 android-bridge/.gradle/
 android-bridge/build/
 android-bridge/app/build/
 android-bridge/local.properties
+dist/

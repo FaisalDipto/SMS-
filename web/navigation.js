@@ -24,6 +24,8 @@
     let currentPage = 'HOME';
     let currentDetailedMap = null;
     let pendingNativeLocation = null;
+    let gatewayApi = null;
+    let demoLocation = null;
 
     function receiveNativeLocation(latitude, longitude, accuracy) {
       if (!pendingNativeLocation) return;
@@ -92,7 +94,7 @@
       const offlineRoads = appView.querySelector('#map-offline-roads');
       const fullMapBounds = { minLatitude: 23.70, maxLatitude: 23.90, minLongitude: 90.34, maxLongitude: 90.43 };
       let mapBounds = { ...fullMapBounds };
-      let lastOrigin = null;
+      let lastOrigin = demoLocation;
       const shelterRecords = [...map.querySelectorAll('[data-map-location][data-map-latitude][data-map-longitude]')]
         .map((marker) => ({
           location: marker.dataset.mapLocation,
@@ -103,7 +105,28 @@
             longitude: Number(marker.dataset.mapLongitude)
           }
         }));
-      const detailedMap = offlineMap?.createMap(detailedMapContainer, shelterRecords);
+      const hazardRecords = [...map.querySelectorAll(
+        '[data-map-hazard][data-map-hazard-latitude][data-map-hazard-longitude]'
+      )].map((marker) => ({
+        hazardId: marker.dataset.mapHazard,
+        kind: marker.dataset.mapHazardKind,
+        roadName: marker.dataset.mapHazardRoad,
+        severity: marker.dataset.mapHazardSeverity,
+        radiusMeters: Number(marker.dataset.mapHazardRadius),
+        latitude: Number(marker.dataset.mapHazardLatitude),
+        longitude: Number(marker.dataset.mapHazardLongitude),
+        expiresAt: Number(marker.dataset.mapHazardExpires),
+        authentication: marker.dataset.mapHazardAuthentication
+      }));
+      const blockingHazards = hazardRecords.filter((hazard) =>
+        String(hazard.authentication).toUpperCase() === 'AUTHENTICATED' &&
+        hazard.expiresAt > Date.now()
+      );
+      const detailedMap = offlineMap?.createMap(
+        detailedMapContainer,
+        shelterRecords,
+        hazardRecords
+      );
       currentDetailedMap = detailedMap;
 
       if (detailedMap) {
@@ -122,6 +145,18 @@
             instance.getCanvas().style.cursor = 'pointer';
           });
           instance.on('mouseleave', 'smsweb-shelters', () => {
+            instance.getCanvas().style.cursor = '';
+          });
+          instance.on('click', 'smsweb-hazards', (event) => {
+            const properties = event.features?.[0]?.properties;
+            if (!properties) return;
+            selection.textContent =
+              `${properties.severity} ${String(properties.kind).replaceAll('_', ' ')} on ${properties.roadName}. Routes avoid the marked zone.`;
+          });
+          instance.on('mouseenter', 'smsweb-hazards', () => {
+            instance.getCanvas().style.cursor = 'pointer';
+          });
+          instance.on('mouseleave', 'smsweb-hazards', () => {
             instance.getCanvas().style.cursor = '';
           });
         }).catch((error) => {
@@ -241,6 +276,20 @@
               marker.style.top = `${top}%`;
             }
           });
+        map.querySelectorAll(
+          '[data-map-hazard][data-map-hazard-latitude][data-map-hazard-longitude]'
+        ).forEach((marker) => {
+          const latitude = Number(marker.dataset.mapHazardLatitude);
+          const longitude = Number(marker.dataset.mapHazardLongitude);
+          const inside = latitude >= mapBounds.minLatitude && latitude <= mapBounds.maxLatitude &&
+            longitude >= mapBounds.minLongitude && longitude <= mapBounds.maxLongitude;
+          marker.style.display = inside ? '' : 'none';
+          if (inside) {
+            const [left, top] = project({ latitude, longitude }).split(',');
+            marker.style.left = `${left}%`;
+            marker.style.top = `${top}%`;
+          }
+        });
       }
 
       function drawOfflineRoads(graph, bounds = mapBounds) {
@@ -329,6 +378,46 @@
           });
       }
 
+      function applyLocation(position, demonstration = false) {
+        lastOrigin = {
+          latitude: Number(position.coords.latitude),
+          longitude: Number(position.coords.longitude)
+        };
+        const distances = [...map.querySelectorAll(
+          '[data-map-location][data-map-latitude][data-map-longitude]'
+        )].map((marker) => ({
+          location: marker.dataset.mapLocation,
+          spaces: marker.dataset.mapSpaces,
+          status: marker.dataset.mapStatus,
+          distance: geo.distanceKm(lastOrigin, {
+            latitude: Number(marker.dataset.mapLatitude),
+            longitude: Number(marker.dataset.mapLongitude)
+          })
+        })).sort((first, second) => first.distance - second.distance);
+
+        distanceList?.replaceChildren(...distances.map((record) => {
+          const item = document.createElement('li');
+          item.textContent = `${record.location}: ${geo.formatDistance(record.distance)} straight-line, ${record.spaces} spaces, ${record.status}.`;
+          return item;
+        }));
+        if (locationStatus) {
+          locationStatus.textContent = demonstration
+            ? 'Judge demo location near Mirpur is active. Distances are straight-line estimates.'
+            : 'Distances are straight-line estimates, not road travel distances.';
+        }
+        void detailedMap?.setUserLocation(lastOrigin);
+        if (locateButton) locateButton.disabled = false;
+      }
+
+      if (demoLocation && geo) {
+        applyLocation({
+          coords: {
+            latitude: demoLocation.latitude,
+            longitude: demoLocation.longitude
+          }
+        }, true);
+      }
+
       if (locateButton && locationStatus && distanceList) {
         locateButton.addEventListener('click', () => {
           if (!geo) {
@@ -339,30 +428,8 @@
           locateButton.disabled = true;
           locationStatus.textContent = 'Requesting your current location...';
           requestDeviceLocation((position) => {
-            lastOrigin = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude
-            };
-            const distances = [...map.querySelectorAll('[data-map-location][data-map-latitude][data-map-longitude]')]
-              .map((marker) => ({
-                location: marker.dataset.mapLocation,
-                spaces: marker.dataset.mapSpaces,
-                status: marker.dataset.mapStatus,
-                distance: geo.distanceKm(lastOrigin, {
-                  latitude: Number(marker.dataset.mapLatitude),
-                  longitude: Number(marker.dataset.mapLongitude)
-                })
-              }))
-              .sort((first, second) => first.distance - second.distance);
-
-            distanceList.replaceChildren(...distances.map((record) => {
-              const item = document.createElement('li');
-              item.textContent = `${record.location}: ${geo.formatDistance(record.distance)} straight-line, ${record.spaces} spaces, ${record.status}.`;
-              return item;
-            }));
-            locationStatus.textContent = 'Distances are straight-line estimates, not road travel distances.';
-            void detailedMap?.setUserLocation(lastOrigin);
-            locateButton.disabled = false;
+            demoLocation = null;
+            applyLocation(position);
           }, (error) => {
             locationStatus.textContent = error.code === 1
               ? 'Location permission was denied.'
@@ -402,7 +469,22 @@
           }
 
           try {
-            const route = routing.shortestPath(routeGraph, lastOrigin, shelter.coordinate);
+            const baselineRoute = routing.shortestPath(
+              routeGraph,
+              lastOrigin,
+              shelter.coordinate
+            );
+            const blockedEdges = routing.blockedEdgesForHazards(
+              routeGraph,
+              hazardRecords,
+              Date.now()
+            );
+            const route = routing.shortestPath(
+              routeGraph,
+              lastOrigin,
+              shelter.coordinate,
+              { blockedEdges }
+            );
             if (route.originSnap.distanceMeters > 1_500 || route.destinationSnap.distanceMeters > 1_500) {
               routeStatus.textContent = 'Your location or the shelter is outside the bundled Mirpur road coverage.';
               return;
@@ -425,14 +507,26 @@
                 return item;
               }));
             }
-            routeStatus.textContent = `Route to ${shelter.location}: ${geo.formatDistance(route.distanceMeters / 1000)} on mapped roads. Focused on the verified Mirpur coverage area.`;
+            const detourMeters = Math.max(0, route.distanceMeters - baselineRoute.distanceMeters);
+            const hazardMessage = blockedEdges.size > 0
+              ? ` Avoiding ${blockedEdges.size} road segment${blockedEdges.size === 1 ? '' : 's'} affected by ${blockingHazards.length} authenticated hazard${blockingHazards.length === 1 ? '' : 's'}${detourMeters >= 10 ? `; safety detour adds ${geo.formatDistance(detourMeters / 1000)}` : ''}.`
+              : ' No authenticated hazard intersects this route.';
+            routeStatus.textContent = `Route to ${shelter.location}: ${geo.formatDistance(route.distanceMeters / 1000)} on mapped roads.${hazardMessage}`;
           } catch (error) {
-            routeStatus.textContent = error.message;
+            routeStatus.textContent = blockingHazards.length > 0
+              ? `${error.message}. Current authenticated hazard zones may disconnect the available road graph.`
+              : error.message;
           }
         });
       }
 
       map.addEventListener('click', (event) => {
+        const hazard = event.target.closest('[data-map-hazard]');
+        if (hazard) {
+          selection.textContent =
+            `${hazard.dataset.mapHazardSeverity} ${hazard.dataset.mapHazardKind.replaceAll('_', ' ')} on ${hazard.dataset.mapHazardRoad}. Routes avoid a ${hazard.dataset.mapHazardRadius} m zone.`;
+          return;
+        }
         const marker = event.target.closest('[data-map-location]');
         if (!marker) return;
 
@@ -470,15 +564,27 @@
           return;
         }
 
+        if (page === 'HAZARDS') {
+          const hazards = typeof storage?.getActiveHazards === 'function'
+            ? await storage.getActiveHazards()
+            : [];
+          renderer.mount(appView, renderer.renderHazardsPage(hazards));
+          return;
+        }
+
         if (page === 'MAP') {
           const record = typeof storage?.getPage === 'function'
             ? await storage.getPage('SHELTER:DHK')
             : null;
-          renderer.mount(appView, renderer.renderMapPage(record || {
+          const hazards = typeof storage?.getActiveHazards === 'function'
+            ? await storage.getActiveHazards()
+            : [];
+          const mapRecord = record || {
             title: 'Crisis map',
             region: 'DHK',
             payload: ''
-          }));
+          };
+          renderer.mount(appView, renderer.renderMapPage({ ...mapRecord, hazards }));
           bindMapInteractions(appView);
           return;
         }
@@ -487,7 +593,24 @@
           const messages = typeof storage?.getRecentMessages === 'function'
             ? await storage.getRecentMessages()
             : [];
-          renderer.mount(appView, renderer.renderActivityPage(messages));
+          const gatewayEvents = gatewayApi?.getActivity?.() || [];
+          const combined = [...gatewayEvents, ...messages]
+            .sort((first, second) =>
+              Number(second.createdAt || 0) - Number(first.createdAt || 0)
+            )
+            .slice(0, 50);
+          renderer.mount(appView, renderer.renderActivityPage(combined));
+          const retryButton = appView.querySelector?.('#activity-retry');
+          const retryStatus = appView.querySelector?.('#activity-retry-status');
+          if (retryButton) {
+            retryButton.disabled = !gatewayApi?.canRetryQueuedMessages?.();
+            retryButton.addEventListener('click', () => {
+              const result = gatewayApi?.retryQueuedMessages?.();
+              retryStatus.textContent = result === 'queued'
+                ? 'Immediate retry requested. Refresh Activity in a few seconds to see the result.'
+                : 'Retry controls are available in the Android gateway.';
+            });
+          }
           return;
         }
 
@@ -505,10 +628,19 @@
       return show(currentPage, appView);
     }
 
-    function initialize({ nav, appView }) {
+    function setDemoLocation(location) {
+      const latitude = Number(location?.latitude);
+      const longitude = Number(location?.longitude);
+      demoLocation = Number.isFinite(latitude) && Number.isFinite(longitude)
+        ? { latitude, longitude }
+        : null;
+    }
+
+    function initialize({ nav, appView, gateway }) {
       if (!nav || !appView) {
         throw new Error('Navigation controls are unavailable');
       }
+      gatewayApi = gateway || null;
 
       nav.addEventListener('click', (event) => {
         const button = event.target.closest('[data-page]');
@@ -527,6 +659,7 @@
       initialize,
       show,
       refresh,
+      setDemoLocation,
       receiveNativeLocation,
       receiveNativeLocationError
     };

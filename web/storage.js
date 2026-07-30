@@ -15,14 +15,15 @@
   'use strict';
 
   const DB_NAME = 'smsweb';
-  const DB_VERSION = 2;
+  const DB_VERSION = 3;
   const STORES = Object.freeze({
     PAGES: 'pages',
     ALERTS: 'alerts',
     MESSAGES: 'messages',
     SETTINGS: 'settings',
     RESPONSE_PARTS: 'responseParts',
-    COMPLETED_RESPONSES: 'completedResponses'
+    COMPLETED_RESPONSES: 'completedResponses',
+    HAZARDS: 'hazards'
   });
 
   function storageError(message) {
@@ -72,6 +73,9 @@
         }
         if (!database.objectStoreNames.contains(STORES.COMPLETED_RESPONSES)) {
           database.createObjectStore(STORES.COMPLETED_RESPONSES, { keyPath: 'responseKey' });
+        }
+        if (!database.objectStoreNames.contains(STORES.HAZARDS)) {
+          database.createObjectStore(STORES.HAZARDS, { keyPath: 'hazardId' });
         }
       };
 
@@ -164,6 +168,36 @@
       .then((alerts) => alerts.filter((alert) => alert.expiresAt > now));
   }
 
+  function saveHazard(hazard) {
+    requireRecord(hazard, 'hazard');
+    requireText(hazard.hazardId, 'hazard.hazardId');
+    requireText(hazard.kind, 'hazard.kind');
+    if (!Number.isFinite(hazard.latitude) || !Number.isFinite(hazard.longitude) ||
+      !Number.isFinite(hazard.radiusMeters) || hazard.radiusMeters <= 0) {
+      throw storageError('hazard coordinates and radius must be valid');
+    }
+    return runRequest(STORES.HAZARDS, 'readwrite', (store) => store.put({
+      ...hazard,
+      receivedAt: hazard.receivedAt ?? Date.now()
+    }));
+  }
+
+  function saveHazards(hazards) {
+    if (!Array.isArray(hazards)) {
+      throw storageError('hazards must be an array');
+    }
+    return Promise.all(hazards.map(saveHazard));
+  }
+
+  function getActiveHazards(now = Date.now()) {
+    if (!Number.isFinite(now)) {
+      throw storageError('now must be a finite timestamp');
+    }
+    return runRequest(STORES.HAZARDS, 'readonly', (store) => store.getAll())
+      .then((hazards) => hazards.filter((hazard) =>
+        Number.isFinite(hazard.expiresAt) && hazard.expiresAt > now));
+  }
+
   function getRecentMessages(limit = 10) {
     if (!Number.isInteger(limit) || limit <= 0) {
       throw storageError('limit must be a positive integer');
@@ -242,6 +276,9 @@
     saveAlert,
     getPage,
     getActiveAlerts,
+    saveHazard,
+    saveHazards,
+    getActiveHazards,
     getRecentMessages,
     queueRequest,
     saveResponsePart,

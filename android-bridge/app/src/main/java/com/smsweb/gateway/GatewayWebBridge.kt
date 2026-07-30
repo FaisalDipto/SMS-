@@ -16,6 +16,12 @@ class GatewayWebBridge(
     fun getGatewayStatus(): String = "ready"
 
     @JavascriptInterface
+    fun getAppRole(): String = GatewayConfig.appRole(appContext)
+
+    @JavascriptInterface
+    fun saveAppRole(value: String): String = GatewayConfig.saveAppRole(appContext, value)
+
+    @JavascriptInterface
     fun getPiUrl(): String = GatewayConfig.piUrl(appContext)
 
     @JavascriptInterface
@@ -65,6 +71,56 @@ class GatewayWebBridge(
         return "queued"
     }
 
+    @JavascriptInterface
+    fun submitAuthorityUpdate(kind: String, payload: String): String {
+        if (!GatewayConfig.hasAuthenticationKey(appContext)) return "authentication-missing"
+        Thread {
+            val result = runCatching {
+                PiHttpClient(appContext).administratorUpdate(kind, JSONObject(payload))
+            }
+            val success = result.isSuccess
+            val message = result.fold(
+                onSuccess = { "Authority ${kind.lowercase()} update saved and signed for distribution." },
+                onFailure = { it.message ?: "Authority update failed." }
+            )
+            GatewayDatabase(appContext).recordEvent(
+                "",
+                if (success) "AUTHORITY_UPDATE" else "AUTHORITY_ERROR",
+                message
+            )
+            webView.post {
+                webView.evaluateJavascript(
+                    "window.SMSWeb?.admin?.receiveResult(" +
+                        "${JSONObject.quote(kind)},$success,${JSONObject.quote(message)})",
+                    null
+                )
+            }
+        }.start()
+        return "queued"
+    }
+
+    @JavascriptInterface
+    fun getGatewayActivity(): String {
+        val events = JSONArray()
+        GatewayDatabase(appContext).recentEvents().forEach { event ->
+            events.put(JSONObject().apply {
+                put("id", event.id)
+                put("requestId", event.requestId)
+                put("state", event.state)
+                put("detail", event.detail)
+                put("createdAt", event.createdAt)
+            })
+        }
+        return events.toString()
+    }
+
+    @JavascriptInterface
+    fun retryQueuedMessages(): String {
+        Thread { GatewayCoordinator(appContext).flush() }.start()
+        GatewayDatabase(appContext).recordEvent("", "MANUAL_RETRY", "Operator requested an immediate retry.")
+        return "queued"
+    }
+
     @Suppress("DEPRECATION")
     @JavascriptInterface
     fun sendSms(recipient: String, text: String): String {
@@ -74,6 +130,11 @@ class GatewayWebBridge(
 
         return try {
             SmsTransport.send(SmsManager.getDefault(), recipient.trim(), text)
+            GatewayDatabase(appContext).recordEvent(
+                SmsProtocol.messageId(text),
+                "HANDOFF",
+                "Request SMS handed to Android for delivery."
+            )
             "queued"
         } catch (_: SecurityException) {
             "permission-denied"

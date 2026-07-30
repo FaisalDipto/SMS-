@@ -58,6 +58,53 @@
     return nearest;
   }
 
+  function distanceFromHazardToEdgeMeters(graph, fromId, edge, hazard) {
+    const from = nodeCoordinate(graph, fromId);
+    const to = nodeCoordinate(graph, edge.to);
+    const latitudeRadians = hazard.latitude * Math.PI / 180;
+    const metresPerLongitude = 111_320 * Math.cos(latitudeRadians);
+    const metresPerLatitude = 110_540;
+    const start = {
+      x: (from.longitude - hazard.longitude) * metresPerLongitude,
+      y: (from.latitude - hazard.latitude) * metresPerLatitude
+    };
+    const end = {
+      x: (to.longitude - hazard.longitude) * metresPerLongitude,
+      y: (to.latitude - hazard.latitude) * metresPerLatitude
+    };
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const lengthSquared = dx * dx + dy * dy;
+    const projection = lengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, -(start.x * dx + start.y * dy) / lengthSquared));
+    const nearestX = start.x + projection * dx;
+    const nearestY = start.y + projection * dy;
+    return Math.hypot(nearestX, nearestY);
+  }
+
+  function blockedEdgesForHazards(graph, hazards, now = Date.now()) {
+    requireGraph(graph);
+    const activeHazards = (Array.isArray(hazards) ? hazards : []).filter((hazard) =>
+      String(hazard.authentication || '').toUpperCase() === 'AUTHENTICATED' &&
+      Number.isFinite(hazard.expiresAt) && hazard.expiresAt > now &&
+      Number.isFinite(hazard.latitude) && Number.isFinite(hazard.longitude) &&
+      Number.isFinite(hazard.radiusMeters) && hazard.radiusMeters > 0);
+    const blockedEdges = new Set();
+
+    for (const [fromId, edges] of Object.entries(graph.edges)) {
+      for (const edge of edges || []) {
+        if (!edge.id) continue;
+        if (activeHazards.some((hazard) =>
+          distanceFromHazardToEdgeMeters(graph, fromId, edge, hazard) <= hazard.radiusMeters
+        )) {
+          blockedEdges.add(edge.id);
+        }
+      }
+    }
+    return blockedEdges;
+  }
+
   class MinHeap {
     constructor() {
       this.items = [];
@@ -163,5 +210,10 @@
     };
   }
 
-  return Object.freeze({ findNearestNode, shortestPath });
+  return Object.freeze({
+    findNearestNode,
+    blockedEdgesForHazards,
+    distanceFromHazardToEdgeMeters,
+    shortestPath
+  });
 });

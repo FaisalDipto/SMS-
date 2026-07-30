@@ -8,6 +8,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 )
@@ -15,6 +18,11 @@ import (
 type Server struct {
 	store             *Store
 	authenticationKey []byte
+}
+
+type ServerOptions struct {
+	WebDirectory string
+	DemoEnabled  bool
 }
 
 type incomingSMS struct {
@@ -34,12 +42,56 @@ type responseStatus struct {
 }
 
 func NewServer(store *Store, authenticationKey []byte) http.Handler {
+	return NewServerWithOptions(store, authenticationKey, ServerOptions{})
+}
+
+func NewServerWithOptions(store *Store, authenticationKey []byte, options ServerOptions) http.Handler {
 	server := &Server{store: store, authenticationKey: authenticationKey}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
 	mux.HandleFunc("POST /sms/incoming", server.incoming)
 	mux.HandleFunc("POST /sms/response", server.response)
+	mux.HandleFunc("GET /admin/state", server.adminState)
+	mux.HandleFunc("POST /admin/shelters", server.updateShelter)
+	mux.HandleFunc("POST /admin/hazards", server.updateHazard)
+	mux.HandleFunc("POST /admin/alerts", server.updateAlert)
+	if options.DemoEnabled {
+		mux.HandleFunc("GET /demo/scenario", server.demoScenario)
+	}
+	if strings.TrimSpace(options.WebDirectory) != "" {
+		webDirectory := filepath.Clean(options.WebDirectory)
+		mux.Handle("/", http.FileServer(http.Dir(webDirectory)))
+	}
 	return mux
+}
+
+func (server *Server) demoScenario(response http.ResponseWriter, _ *http.Request) {
+	requests := []Request{
+		{Version: "1", RequestID: "DEMO1", Command: "SHELTER", Arguments: "DHK"},
+		{Version: "1", RequestID: "DEMO2", Command: "HAZARD", Arguments: "DHK"},
+		{Version: "1", RequestID: "DEMO3", Command: "ALERT", Arguments: "DHK"},
+	}
+	var messages []string
+	for _, demoRequest := range requests {
+		parts, err := server.createResponses(demoRequest)
+		if err != nil {
+			writeError(response, http.StatusInternalServerError, err)
+			return
+		}
+		for _, part := range parts {
+			signed, err := SignMessage(part, server.authenticationKey)
+			if err != nil {
+				writeError(response, http.StatusInternalServerError, err)
+				return
+			}
+			messages = append(messages, signed)
+		}
+	}
+	writeJSON(response, http.StatusOK, map[string]any{
+		"mode":     "DEMO",
+		"messages": messages,
+		"location": map[string]float64{"latitude": 23.8144, "longitude": 90.3687},
+	})
 }
 
 func (server *Server) health(response http.ResponseWriter, _ *http.Request) {
@@ -171,7 +223,7 @@ func (server *Server) createResponses(request Request) ([]string, error) {
 		response, err := SerializeResponse(request.RequestID, "HOME", "-", "SMSWeb crisis service")
 		return []string{response}, err
 	case "HELP":
-		response, err := SerializeResponse(request.RequestID, "HELP", "-", "HOME;SHELTER;MED;ROAD;REPORT;HELP;ALERT")
+		response, err := SerializeResponse(request.RequestID, "HELP", "-", "HOME;SHELTER;MED;ROAD;REPORT;HELP;ALERT;HAZARD")
 		return []string{response}, err
 	case "ALERT":
 		region, err := parseShelterRegion(request.Arguments)
@@ -188,9 +240,67 @@ func (server *Server) createResponses(request Request) ([]string, error) {
 		alert := alerts[0]
 		response, err := SerializeAlert(alert.AlertID, alert.Priority, alert.Expires, alert.Region, alert.Message)
 		return []string{response}, err
+	case "HAZARD":
+		region, err := parseShelterRegion(request.Arguments)
+		if err != nil {
+			return nil, err
+		}
+		hazards, err := server.store.FindActiveHazards(region, time.Now().UTC())
+		if err != nil {
+			return nil, err
+		}
+		if len(hazards) == 0 {
+			return []string{SerializeError(request.RequestID, "NO_HAZARDS", "No active hazards are available")}, nil
+		}
+		records := make([]string, 0, len(hazards))
+		for _, hazard := range hazards {
+			records = append(records, compactHazard(hazard))
+		}
+		metadata, err := hazardResponseMetadata(hazards)
+		if err != nil {
+			return nil, err
+		}
+		return SerializeResponseParts(
+			request.RequestID,
+			"HAZARD",
+			region,
+			strings.Join(records, ";"),
+			60,
+			metadata,
+		)
 	default:
 		return []string{SerializeError(request.RequestID, "NOT_IMPLEMENTED", fmt.Sprintf("command %s is not implemented", request.Command))}, nil
 	}
+}
+
+func hazardResponseMetadata(hazards []Hazard) (ResponseMetadata, error) {
+	if len(hazards) == 0 {
+		return ResponseMetadata{}, errors.New("no hazard records are available")
+	}
+	metadata := ResponseMetadata{
+		Trust:      hazards[0].Trust,
+		Source:     hazards[0].Source,
+		VerifiedAt: hazards[0].VerifiedAt,
+		ExpiresAt:  hazards[0].ExpiresAt,
+	}
+	for _, hazard := range hazards[1:] {
+		if hazard.Source != metadata.Source {
+			metadata.Source = "MULTIPLE"
+		}
+		if hazard.Trust != metadata.Trust {
+			metadata.Trust = "UNVERIFIED"
+		}
+		if hazard.VerifiedAt < metadata.VerifiedAt {
+			metadata.VerifiedAt = hazard.VerifiedAt
+		}
+		if hazard.ExpiresAt < metadata.ExpiresAt {
+			metadata.ExpiresAt = hazard.ExpiresAt
+		}
+	}
+	if err := validateResponseMetadata(metadata); err != nil {
+		return ResponseMetadata{}, fmt.Errorf("invalid hazard metadata: %w", err)
+	}
+	return metadata, nil
 }
 
 func shelterResponseMetadata(shelters []Shelter) (ResponseMetadata, error) {
@@ -246,6 +356,9 @@ func writeError(response http.ResponseWriter, status int, err error) {
 func main() {
 	address := flag.String("addr", ":8080", "HTTP listen address")
 	databasePath := flag.String("db", "smsweb.db", "SQLite database path")
+	webDirectory := flag.String("web", "", "optional web application directory")
+	demoMode := flag.Bool("demo", false, "enable the local judge demo scenario")
+	openDemo := flag.Bool("open", false, "open the local application in the default browser")
 	flag.Parse()
 
 	store, err := OpenStore(*databasePath)
@@ -254,10 +367,47 @@ func main() {
 	}
 	defer store.Close()
 	authenticationKey := []byte(os.Getenv("SMSWEB_AUTH_KEY"))
+	if *demoMode && len(authenticationKey) < minimumAuthenticationKeyBytes {
+		authenticationKey = []byte("smsweb-local-judge-demo-key")
+		log.Print("DEMO MODE: using the bundled local-only demonstration key")
+	}
 	if len(authenticationKey) < minimumAuthenticationKeyBytes {
 		log.Fatalf("SMSWEB_AUTH_KEY must be set to at least %d bytes", minimumAuthenticationKeyBytes)
 	}
 
 	log.Printf("SMSWeb crisis service listening on %s", *address)
-	log.Fatal(http.ListenAndServe(*address, NewServer(store, authenticationKey)))
+	if *openDemo {
+		go func() {
+			time.Sleep(500 * time.Millisecond)
+			openBrowser(localBrowserURL(*address))
+		}()
+	}
+	log.Fatal(http.ListenAndServe(*address, NewServerWithOptions(store, authenticationKey, ServerOptions{
+		WebDirectory: *webDirectory,
+		DemoEnabled:  *demoMode,
+	})))
+}
+
+func localBrowserURL(address string) string {
+	host := strings.TrimPrefix(address, ":")
+	if strings.Contains(host, ":") {
+		parts := strings.Split(host, ":")
+		host = parts[len(parts)-1]
+	}
+	return "http://127.0.0.1:" + host
+}
+
+func openBrowser(url string) {
+	var command *exec.Cmd
+	switch runtime.GOOS {
+	case "windows":
+		command = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
+	case "darwin":
+		command = exec.Command("open", url)
+	default:
+		command = exec.Command("xdg-open", url)
+	}
+	if err := command.Start(); err != nil {
+		log.Printf("open browser: %v", err)
+	}
 }

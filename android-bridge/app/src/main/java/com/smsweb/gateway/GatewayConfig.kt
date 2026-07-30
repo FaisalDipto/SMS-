@@ -8,7 +8,26 @@ object GatewayConfig {
     private const val SERVICE_NUMBER = "service_number"
     private const val TRUSTED_SENDERS = "trusted_senders"
     private const val AUTHENTICATION_KEY = "authentication_key"
+    private const val APP_ROLE = "app_role"
     const val DEFAULT_PI_URL = "http://192.168.43.1:8080"
+    const val ROLE_GATEWAY = "GATEWAY"
+    const val ROLE_USER = "USER"
+
+    fun appRole(context: Context): String = context
+        .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        .getString(APP_ROLE, ROLE_GATEWAY)
+        .orEmpty()
+        .uppercase()
+        .let { if (it == ROLE_USER) ROLE_USER else ROLE_GATEWAY }
+
+    fun saveAppRole(context: Context, value: String): String {
+        val role = if (value.trim().uppercase() == ROLE_USER) ROLE_USER else ROLE_GATEWAY
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(APP_ROLE, role)
+            .apply()
+        return role
+    }
 
     fun piUrl(context: Context): String = context
         .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -62,6 +81,14 @@ object GatewayConfig {
             .getStringSet(TRUSTED_SENDERS, emptySet())
             .orEmpty()
         return trusted.isEmpty() || trusted.contains(normalizePhone(sender))
+    }
+
+    fun isServiceSender(context: Context, sender: String): Boolean {
+        val expected = normalizePhone(serviceNumber(context)).filter(Char::isDigit)
+        val actual = normalizePhone(sender).filter(Char::isDigit)
+        if (expected.isEmpty() || actual.isEmpty()) return false
+        return expected == actual ||
+            (expected.length >= 10 && actual.length >= 10 && expected.takeLast(10) == actual.takeLast(10))
     }
 
     private fun normalizePhone(value: String): String = value.filter { it.isDigit() || it == '+' }

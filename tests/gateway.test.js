@@ -39,6 +39,7 @@ test('loads and saves the native Pi URL', () => {
   const saveServiceNumberButton = element();
   const requestSheltersButton = element();
   const requestAlertsButton = element();
+  const requestHazardsButton = element();
   const requestStatus = element();
   const authenticationKeyInput = element();
   const saveAuthenticationKeyButton = element();
@@ -58,6 +59,7 @@ test('loads and saves the native Pi URL', () => {
     saveServiceNumberButton,
     requestSheltersButton,
     requestAlertsButton,
+    requestHazardsButton,
     requestStatusElement: requestStatus,
     authenticationKeyInput,
     saveAuthenticationKeyButton,
@@ -90,6 +92,7 @@ test('updates the badge when the native health result arrives', () => {
     saveServiceNumberButton: element(),
     requestSheltersButton: element(),
     requestAlertsButton: element(),
+    requestHazardsButton: element(),
     requestStatusElement: element(),
     authenticationKeyInput: element(),
     saveAuthenticationKeyButton: element(),
@@ -117,6 +120,51 @@ test('forwards native SMS responses and authentication status to the handler', (
   const rawText = 'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL';
   assert.equal(instance.receiveSms(rawText, 'AUTHENTICATED'), 'handled');
   assert.deepEqual(received, [rawText, 'AUTHENTICATED']);
+});
+
+test('exposes native gateway activity and manual retry controls', () => {
+  let retried = false;
+  const instance = gateway.createGateway({
+    getGatewayActivity: () => JSON.stringify([
+      { requestId: 'A17K', state: 'FORWARDED', createdAt: 10 }
+    ]),
+    retryQueuedMessages: () => {
+      retried = true;
+      return 'queued';
+    }
+  });
+
+  assert.deepEqual(instance.getActivity(), [
+    { requestId: 'A17K', state: 'FORWARDED', createdAt: 10 }
+  ]);
+  assert.equal(instance.retryQueuedMessages(), 'queued');
+  assert.equal(retried, true);
+});
+
+test('switches between user and gateway phone roles', () => {
+  let role = 'GATEWAY';
+  const instance = gateway.createGateway({
+    getAppRole: () => role,
+    saveAppRole: (value) => {
+      role = value;
+      return role;
+    }
+  });
+  const root = { dataset: {} };
+  const description = element();
+  const title = element();
+
+  assert.equal(instance.getAppRole(), 'GATEWAY');
+  assert.equal(instance.saveAppRole('USER'), 'USER');
+  instance.applyAppRole('USER', {
+    roleRoot: root,
+    roleDescription: description,
+    gatewayTitle: title
+  });
+
+  assert.equal(root.dataset.appRole, 'USER');
+  assert.equal(title.textContent, 'SMSWeb user app');
+  assert.match(description.textContent, /renders authenticated response SMS/);
 });
 
 test('serializes and sends a shelter request through the native bridge', () => {
@@ -155,6 +203,21 @@ test('serializes and sends an alert request through the native bridge', () => {
 
   assert.equal(sentText, result.rawText);
   assert.equal(protocol.parseRequest(result.rawText).command, 'ALERT');
+});
+
+test('serializes and sends a hazard request through the native bridge', () => {
+  let sentText;
+  const instance = gateway.createGateway({
+    sendSms: (_recipient, rawText) => {
+      sentText = rawText;
+      return 'queued';
+    }
+  }, protocol);
+
+  const result = instance.sendHazardRequest('+8801700000000', 'DHK');
+
+  assert.equal(sentText, result.rawText);
+  assert.equal(protocol.parseRequest(result.rawText).command, 'HAZARD');
 });
 
 test('replays pending native responses and acknowledges them', async () => {
@@ -208,6 +271,7 @@ test('stores the authentication key through the native-only bridge', () => {
     saveServiceNumberButton: element(),
     requestSheltersButton: element(),
     requestAlertsButton: element(),
+    requestHazardsButton: element(),
     requestStatusElement: element(),
     authenticationKeyInput,
     saveAuthenticationKeyButton,

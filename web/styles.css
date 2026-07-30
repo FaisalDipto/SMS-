@@ -66,6 +66,9 @@ h2 {
 
 .status-card,
 .gateway-card,
+.authority-console,
+.developer-tools,
+.judge-demo,
 .page-view {
   border: 1px solid #d4e5e1;
   border-radius: 1rem;
@@ -74,9 +77,9 @@ h2 {
 }
 
 .app-nav {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
   gap: 0.4rem;
+  overflow-x: auto;
   margin-bottom: 1rem;
   padding: 0.35rem;
   border: 1px solid #d4e5e1;
@@ -85,6 +88,8 @@ h2 {
 }
 
 .app-nav button {
+  flex: 1 0 auto;
+  min-width: 5.25rem;
   border: 0;
   border-radius: 0.6rem;
   padding: 0.65rem 0.35rem;
@@ -94,6 +99,133 @@ h2 {
   font: inherit;
   font-size: 0.8rem;
   font-weight: 800;
+}
+
+.authority-console,
+.developer-tools {
+  margin-bottom: 1rem;
+  padding: 1rem 1.15rem;
+}
+
+.judge-demo {
+  margin-bottom: 1rem;
+  border-color: #7dd3c7;
+  padding: 1.1rem 1.25rem;
+  background: linear-gradient(135deg, #ecfdf5, #ffffff);
+}
+
+.judge-demo p {
+  color: #55716d;
+  line-height: 1.55;
+}
+
+#judge-demo-status {
+  margin: 0.75rem 0 0;
+  font-size: 0.85rem;
+}
+
+.authority-console > summary,
+.developer-tools > summary {
+  cursor: pointer;
+  color: #17312f;
+  font-weight: 800;
+}
+
+.authority-console[open] > summary,
+.developer-tools[open] > summary {
+  margin-bottom: 1rem;
+}
+
+.authority-intro {
+  display: flex;
+  gap: 1rem;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.authority-intro h2 {
+  margin-bottom: 0;
+}
+
+.authority-intro > p {
+  max-width: 24rem;
+  color: #55716d;
+  font-size: 0.85rem;
+}
+
+.authority-console > label,
+.authority-forms label {
+  display: grid;
+  gap: 0.35rem;
+  color: #17312f;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.authority-console input,
+.authority-console select {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #b7d2cd;
+  border-radius: 0.55rem;
+  padding: 0.65rem;
+  color: #17312f;
+  background: #ffffff;
+  font: inherit;
+}
+
+.authority-forms {
+  display: grid;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+
+.authority-forms form {
+  border: 1px solid #d4e5e1;
+  border-radius: 0.75rem;
+  padding: 0.9rem;
+  background: #f7fbfa;
+}
+
+.authority-forms h3 {
+  margin: 0 0 0.75rem;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.form-wide {
+  grid-column: 1 / -1;
+}
+
+.authority-forms button,
+.judge-demo button,
+.activity-retry {
+  margin-top: 0.8rem;
+  border: 0;
+  border-radius: 0.6rem;
+  padding: 0.7rem 0.9rem;
+  color: #ffffff;
+  background: #0f766e;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.form-status {
+  margin: 0.9rem 0 0;
+  color: #55716d;
+}
+
+.success-status {
+  color: #166534;
+}
+
+.error-status {
+  color: #991b1b;
 }
 
 .app-nav button[aria-current="page"] {
@@ -135,6 +267,50 @@ h2 {
 .gateway-card {
   margin-bottom: 1rem;
   padding: 1.1rem 1.25rem;
+}
+
+.role-selector {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  border: 1px solid #7dd3c7;
+  border-radius: 0.75rem;
+  padding: 0.8rem;
+  background: #ecfdf5;
+}
+
+.role-selector p {
+  margin: 0.2rem 0 0;
+  font-size: 0.78rem;
+}
+
+.role-selector-controls {
+  display: flex;
+  gap: 0.5rem;
+  flex: 0 0 auto;
+}
+
+.role-selector select,
+.role-selector button {
+  border: 1px solid #0f766e;
+  border-radius: 0.55rem;
+  padding: 0.55rem;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.role-selector button {
+  color: #ffffff;
+  background: #0f766e;
+}
+
+body[data-app-role="USER"] .gateway-only,
+body[data-app-role="USER"] .authority-console,
+body[data-app-role="USER"] .connection-badge {
+  display: none;
 }
 
 .gateway-card-header {
@@ -794,6 +970,29 @@ h2 {
   background: #ca8a04;
 }
 
+.map-hazard-marker {
+  position: absolute;
+  z-index: 8;
+  width: 1.15rem;
+  height: 1.15rem;
+  transform: translate(-50%, -50%) rotate(45deg);
+  border: 0.18rem solid #ffffff;
+  border-radius: 0.15rem;
+  background: #ea580c;
+  box-shadow: 0 0.2rem 0.55rem rgba(124, 45, 18, 0.35);
+  cursor: pointer;
+}
+
+.hazard-routing-note {
+  margin: 0.75rem 0 0;
+  border-left: 0.3rem solid #ea580c;
+  border-radius: 0.35rem;
+  padding: 0.65rem 0.75rem;
+  color: #7c2d12 !important;
+  background: #fff7ed;
+  font-size: 0.8rem;
+}
+
 .map-summary {
   display: flex;
   flex-wrap: wrap;
@@ -945,12 +1144,9 @@ h2 {
 }
 
 .simulator-card {
-  margin-top: 1rem;
-  border: 1px solid #d4e5e1;
-  border-radius: 1rem;
+  border: 0;
   padding: 1.25rem;
-  background: rgba(255, 255, 255, 0.88);
-  box-shadow: 0 1rem 3rem rgba(23, 49, 47, 0.07);
+  background: transparent;
 }
 
 .simulator-card .eyebrow {
@@ -1054,5 +1250,23 @@ h2 {
 
   .activity-item time {
     align-self: flex-start;
+  }
+
+  .authority-intro {
+    display: block;
+  }
+
+  .role-selector,
+  .role-selector-controls {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-wide {
+    grid-column: auto;
   }
 }

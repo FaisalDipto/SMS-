@@ -23,7 +23,15 @@ data class WebResponse(
     val authentication: String
 )
 
-class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gateway.db", null, 4) {
+data class GatewayEvent(
+    val id: Long,
+    val requestId: String,
+    val state: String,
+    val detail: String,
+    val createdAt: Long
+)
+
+class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gateway.db", null, 5) {
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL("""
             CREATE TABLE gateway_queue (
@@ -48,6 +56,7 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
                 created_at INTEGER NOT NULL
             )
         """.trimIndent())
+        createGatewayEventsTable(db)
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
@@ -66,6 +75,9 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
                     created_at INTEGER NOT NULL
                 )
             """.trimIndent())
+        }
+        if (oldVersion < 5) {
+            createGatewayEventsTable(db)
         }
     }
 
@@ -89,6 +101,21 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
         recipient = recipient,
         text = text,
         fingerprint = fingerprint("TO_USER|$recipient|$text"),
+        subscriptionId = subscriptionId,
+        authentication = authentication
+    )
+
+    fun enqueueToWeb(
+        sender: String,
+        text: String,
+        subscriptionId: Int,
+        authentication: String
+    ): Boolean = insert(
+        direction = "TO_WEB",
+        sender = sender,
+        recipient = "",
+        text = text,
+        fingerprint = fingerprint("TO_WEB|$sender|$text"),
         subscriptionId = subscriptionId,
         authentication = authentication
     )
@@ -132,8 +159,8 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
         readableDatabase.query(
             "gateway_queue",
             arrayOf("id", "text", "authentication"),
-            "direction = ? AND web_delivered = 0 AND authentication = ?",
-            arrayOf("TO_USER", AuthenticationStatus.AUTHENTICATED.name),
+            "direction IN (?, ?) AND web_delivered = 0 AND authentication = ?",
+            arrayOf("TO_USER", "TO_WEB", AuthenticationStatus.AUTHENTICATED.name),
             null,
             null,
             "id ASC"
@@ -149,8 +176,8 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
         writableDatabase.update(
             "gateway_queue",
             ContentValues().apply { put("web_delivered", 1) },
-            "direction = ? AND text = ?",
-            arrayOf("TO_USER", text)
+            "direction IN (?, ?) AND text = ?",
+            arrayOf("TO_USER", "TO_WEB", text)
         )
     }
 
@@ -159,6 +186,50 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
             "UPDATE gateway_queue SET status = 'QUEUED', attempts = attempts + 1 WHERE id = ?",
             arrayOf(id)
         )
+    }
+
+    fun recordEvent(requestId: String?, state: String, detail: String) {
+        writableDatabase.insert(
+            "gateway_events",
+            null,
+            ContentValues().apply {
+                put("request_id", requestId.orEmpty())
+                put("state", state)
+                put("detail", detail.take(240))
+                put("created_at", System.currentTimeMillis())
+            }
+        )
+        writableDatabase.execSQL("""
+            DELETE FROM gateway_events
+            WHERE id NOT IN (
+                SELECT id FROM gateway_events ORDER BY created_at DESC, id DESC LIMIT 100
+            )
+        """.trimIndent())
+    }
+
+    fun recentEvents(limit: Int = 50): List<GatewayEvent> {
+        val events = mutableListOf<GatewayEvent>()
+        readableDatabase.query(
+            "gateway_events",
+            arrayOf("id", "request_id", "state", "detail", "created_at"),
+            null,
+            null,
+            null,
+            null,
+            "created_at DESC, id DESC",
+            limit.coerceIn(1, 100).toString()
+        ).use { cursor ->
+            while (cursor.moveToNext()) {
+                events += GatewayEvent(
+                    id = cursor.getLong(0),
+                    requestId = cursor.getString(1),
+                    state = cursor.getString(2),
+                    detail = cursor.getString(3),
+                    createdAt = cursor.getLong(4)
+                )
+            }
+        }
+        return events
     }
 
     fun rememberAuthenticatedMessage(signature: String, expiresAt: Long): Boolean {
@@ -213,6 +284,18 @@ class GatewayDatabase(context: Context) : SQLiteOpenHelper(context, "smsweb_gate
             "UPDATE gateway_queue SET status = ? WHERE id = ?",
             arrayOf(status, id)
         )
+    }
+
+    private fun createGatewayEventsTable(db: SQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS gateway_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                request_id TEXT NOT NULL,
+                state TEXT NOT NULL,
+                detail TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )
+        """.trimIndent())
     }
 
     private fun fingerprint(value: String): String = MessageDigest

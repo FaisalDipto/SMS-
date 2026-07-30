@@ -41,11 +41,24 @@ class PiHttpClient(private val context: Context) {
         }
     }
 
-    private fun post(path: String, body: JSONObject): JSONObject {
+    fun administratorUpdate(kind: String, body: JSONObject): JSONObject {
+        val path = when (kind.lowercase()) {
+            "shelter" -> "/admin/shelters"
+            "hazard" -> "/admin/hazards"
+            "alert" -> "/admin/alerts"
+            else -> throw IllegalArgumentException("Unknown authority update type")
+        }
+        return post(path, body, GatewayConfig.authenticationKey(context))
+    }
+
+    private fun post(path: String, body: JSONObject, administratorKey: String? = null): JSONObject {
         val connection = open(path, "POST")
         return try {
             connection.doOutput = true
             connection.setRequestProperty("Content-Type", "application/json")
+            if (!administratorKey.isNullOrBlank()) {
+                connection.setRequestProperty("X-SMSWeb-Key", administratorKey)
+            }
             connection.outputStream.use { it.write(body.toString().toByteArray()) }
             val status = connection.responseCode
             val stream = if (status in 200..299) connection.inputStream else connection.errorStream

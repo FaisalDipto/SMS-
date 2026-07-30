@@ -1,4 +1,4 @@
-const CACHE_NAME = 'smsweb-v12';
+const CACHE_NAME = 'smsweb-v15';
 const APP_SHELL = [
   './',
   './index.html',
@@ -28,6 +28,7 @@ const APP_SHELL = [
   './storage.js',
   './multipart.js',
   './geo.js',
+  './hazards.js',
   './routing.js',
   './data/mirpur-road-graph.js',
   './map.js',
@@ -35,6 +36,8 @@ const APP_SHELL = [
   './navigation.js',
   './simulator.js',
   './gateway.js',
+  './admin.js',
+  './demo.js',
   './sw.js'
 ];
 

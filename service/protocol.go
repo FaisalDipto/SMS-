@@ -26,6 +26,7 @@ var allowedCommands = map[string]bool{
 	"REPORT":  true,
 	"HELP":    true,
 	"ALERT":   true,
+	"HAZARD":  true,
 }
 
 var alertPriorities = map[string]bool{
@@ -311,6 +312,31 @@ func compactShelter(location string, latitude, longitude float64, spaces int, st
 		strconv.FormatFloat(longitude, 'f', -1, 64),
 		strconv.Itoa(spaces),
 		status,
+	}, ":")
+}
+
+func compactHazard(hazard Hazard) string {
+	kindCodes := map[string]string{
+		"ROAD_CLOSED": "C",
+		"FLOOD":       "F",
+		"FIRE":        "R",
+		"UNSAFE":      "U",
+	}
+	severityCodes := map[string]string{
+		"LOW": "L", "MEDIUM": "M", "HIGH": "H", "CRITICAL": "C",
+	}
+	roadName := strings.ReplaceAll(hazard.RoadName, " ", "_")
+	if len(roadName) > 20 {
+		roadName = roadName[:20]
+	}
+	return strings.Join([]string{
+		hazard.HazardID,
+		kindCodes[hazard.Kind],
+		strconv.FormatFloat(hazard.Latitude, 'f', 4, 64),
+		strconv.FormatFloat(hazard.Longitude, 'f', 4, 64),
+		strconv.Itoa(hazard.Radius),
+		severityCodes[hazard.Severity],
+		roadName,
 	}, ":")
 }
 

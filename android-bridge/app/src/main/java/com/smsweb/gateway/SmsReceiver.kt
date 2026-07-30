@@ -23,12 +23,20 @@ class SmsReceiver : BroadcastReceiver() {
                     val completeText = messages.joinToString(separator = "") { message ->
                         message.messageBody.orEmpty()
                     }
-                    GatewayCoordinator(context.applicationContext)
-                        .acceptIncomingSms(
+                    val appContext = context.applicationContext
+                    if (GatewayConfig.appRole(appContext) == GatewayConfig.ROLE_USER) {
+                        ClientResponseCoordinator(appContext).acceptIncomingResponse(
                             sender,
                             completeText,
                             subscriptionId
                         )
+                    } else {
+                        GatewayCoordinator(appContext).acceptIncomingSms(
+                            sender,
+                            completeText,
+                            subscriptionId
+                        )
+                    }
                 }
             } finally {
                 pendingResult.finish()

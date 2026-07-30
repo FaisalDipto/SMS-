@@ -52,3 +52,47 @@ test('rejects disconnected destinations', () => {
     graph.nodes.B
   ), /No available route/);
 });
+
+test('blocks road edges intersecting authenticated current hazards', () => {
+  const hazards = [{
+    hazardId: 'HZD1',
+    latitude: 23.8000,
+    longitude: 90.3650,
+    radiusMeters: 100,
+    expiresAt: 1_700_000_060_000,
+    authentication: 'AUTHENTICATED'
+  }];
+
+  const blocked = routing.blockedEdgesForHazards(graph, hazards, 1_700_000_000_000);
+  assert.deepEqual([...blocked], ['AB']);
+
+  const route = routing.shortestPath(
+    graph,
+    { latitude: 23.8001, longitude: 90.3601 },
+    { latitude: 23.8099, longitude: 90.3699 },
+    { blockedEdges: blocked }
+  );
+  assert.deepEqual(route.nodeIds, ['A', 'D', 'C']);
+});
+
+test('ignores expired and unauthenticated hazards when blocking roads', () => {
+  const records = [{
+    latitude: 23.8000,
+    longitude: 90.3650,
+    radiusMeters: 100,
+    expiresAt: 1_699_999_999_000,
+    authentication: 'AUTHENTICATED'
+  }, {
+    latitude: 23.8000,
+    longitude: 90.3650,
+    radiusMeters: 100,
+    expiresAt: 1_700_000_060_000,
+    authentication: 'UNVERIFIED'
+  }];
+
+  assert.equal(routing.blockedEdgesForHazards(
+    graph,
+    records,
+    1_700_000_000_000
+  ).size, 0);
+});

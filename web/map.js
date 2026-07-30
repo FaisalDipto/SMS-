@@ -76,6 +76,47 @@
     }]);
   }
 
+  function hazardFeatures(hazards) {
+    return featureCollection((Array.isArray(hazards) ? hazards : []).map((hazard) => ({
+      type: 'Feature',
+      geometry: {
+        type: 'Point',
+        coordinates: [hazard.longitude, hazard.latitude]
+      },
+      properties: {
+        hazardId: hazard.hazardId,
+        kind: hazard.kind,
+        severity: hazard.severity,
+        roadName: hazard.roadName,
+        radiusMeters: Number(hazard.radiusMeters)
+      }
+    })));
+  }
+
+  function hazardAreaFeatures(hazards) {
+    return featureCollection((Array.isArray(hazards) ? hazards : []).map((hazard) => {
+      const latitudeRadians = hazard.latitude * Math.PI / 180;
+      const latitudeRadius = hazard.radiusMeters / 110_540;
+      const longitudeRadius = hazard.radiusMeters /
+        Math.max(1, 111_320 * Math.cos(latitudeRadians));
+      const coordinates = Array.from({ length: 33 }, (_unused, index) => {
+        const angle = (index / 32) * Math.PI * 2;
+        return [
+          hazard.longitude + Math.cos(angle) * longitudeRadius,
+          hazard.latitude + Math.sin(angle) * latitudeRadius
+        ];
+      });
+      return {
+        type: 'Feature',
+        geometry: { type: 'Polygon', coordinates: [coordinates] },
+        properties: {
+          hazardId: hazard.hazardId,
+          severity: hazard.severity
+        }
+      };
+    }));
+  }
+
   function pointFeature(coordinate) {
     if (!coordinate) return EMPTY_COLLECTION;
     return featureCollection([{
@@ -88,7 +129,7 @@
     }]);
   }
 
-  function buildStyle(archiveUrl, shelters) {
+  function buildStyle(archiveUrl, shelters, hazards = []) {
     const baseUrl = new URL('.', document.baseURI).href;
     const baseLayers = basemaps.layers(
       'protomaps',
@@ -117,6 +158,14 @@
         userLocation: {
           type: 'geojson',
           data: EMPTY_COLLECTION
+        },
+        hazards: {
+          type: 'geojson',
+          data: hazardFeatures(hazards)
+        },
+        hazardAreas: {
+          type: 'geojson',
+          data: hazardAreaFeatures(hazards)
         }
       },
       layers: [
@@ -179,6 +228,50 @@
           }
         },
         {
+          id: 'smsweb-hazard-radius',
+          type: 'fill',
+          source: 'hazardAreas',
+          paint: {
+            'fill-color': '#f97316',
+            'fill-opacity': 0.18,
+            'fill-outline-color': '#c2410c'
+          }
+        },
+        {
+          id: 'smsweb-hazards',
+          type: 'circle',
+          source: 'hazards',
+          paint: {
+            'circle-radius': 8,
+            'circle-color': [
+              'case',
+              ['==', ['get', 'severity'], 'CRITICAL'],
+              '#b91c1c',
+              '#ea580c'
+            ],
+            'circle-stroke-color': '#ffffff',
+            'circle-stroke-width': 3
+          }
+        },
+        {
+          id: 'smsweb-hazard-labels',
+          type: 'symbol',
+          source: 'hazards',
+          minzoom: 12,
+          layout: {
+            'text-field': ['concat', ['get', 'kind'], ' · ', ['get', 'roadName']],
+            'text-font': ['Noto Sans Medium'],
+            'text-size': 12,
+            'text-offset': [0, 1.4],
+            'text-anchor': 'top'
+          },
+          paint: {
+            'text-color': '#9a3412',
+            'text-halo-color': '#ffffff',
+            'text-halo-width': 2
+          }
+        },
+        {
           id: 'smsweb-user-location',
           type: 'circle',
           source: 'userLocation',
@@ -193,7 +286,7 @@
     };
   }
 
-  function createMap(container, shelters = []) {
+  function createMap(container, shelters = [], hazards = []) {
     if (!container || !maplibregl || !pmtiles || !basemaps) {
       return null;
     }
@@ -206,7 +299,7 @@
 
     const map = new maplibregl.Map({
       container,
-      style: buildStyle(`pmtiles://${ARCHIVE_KEY}`, shelters),
+      style: buildStyle(`pmtiles://${ARCHIVE_KEY}`, shelters, hazards),
       center: [90.38, 23.81],
       zoom: 11.2,
       minZoom: 9,
@@ -248,6 +341,11 @@
         const instance = await ready;
         instance.getSource('userLocation')?.setData(pointFeature(coordinate));
       },
+      async setHazards(records) {
+        const instance = await ready;
+        instance.getSource('hazards')?.setData(hazardFeatures(records));
+        instance.getSource('hazardAreas')?.setData(hazardAreaFeatures(records));
+      },
       async showRoute(route) {
         const instance = await ready;
         instance.getSource('route')?.setData(routeFeature(route));
@@ -273,6 +371,8 @@
   return {
     createMap,
     shelterFeatures,
+    hazardFeatures,
+    hazardAreaFeatures,
     routeFeature,
     pointFeature
   };

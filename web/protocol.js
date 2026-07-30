@@ -20,7 +20,8 @@
     'ROAD',
     'REPORT',
     'HELP',
-    'ALERT'
+    'ALERT',
+    'HAZARD'
   ]);
   const RESPONSE_PAGES = new Set([
     'HOME',
@@ -29,7 +30,8 @@
     'ROAD',
     'REPORT',
     'HELP',
-    'ALERTS'
+    'ALERTS',
+    'HAZARD'
   ]);
   const ALERT_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
   const RESPONSE_TRUST_LEVELS = new Set(['VERIFIED', 'DEMO', 'UNVERIFIED']);

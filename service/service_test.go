@@ -38,6 +38,27 @@ func requestJSON(t *testing.T, handler http.Handler, method, path string, payloa
 	return response
 }
 
+func requestAdminJSON(
+	t *testing.T,
+	handler http.Handler,
+	method string,
+	path string,
+	payload any,
+	key string,
+) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest(method, path, bytes.NewReader(body))
+	request.Header.Set("Content-Type", "application/json")
+	request.Header.Set("X-SMSWeb-Key", key)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	return response
+}
+
 func TestHealth(t *testing.T) {
 	_, handler := newTestServer(t)
 	request := httptest.NewRequest(http.MethodGet, "/health", nil)
@@ -46,6 +67,122 @@ func TestHealth(t *testing.T) {
 
 	if response.Code != http.StatusOK || response.Body.String() != "{\"status\":\"ok\"}\n" {
 		t.Fatalf("unexpected health response: %d %s", response.Code, response.Body.String())
+	}
+}
+
+func TestAdministratorUpdatesRequireTheSharedKeyAndWriteAudit(t *testing.T) {
+	_, handler := newTestServer(t)
+	update := hazardUpdate{
+		HazardID:         "HZD9",
+		Kind:             "FLOOD",
+		Region:           "DHK",
+		Latitude:         23.8101,
+		Longitude:        90.3691,
+		RadiusMeters:     120,
+		Severity:         "HIGH",
+		RoadName:         "Mirpur Road",
+		Description:      "Flood water across the carriageway",
+		Source:           "DHK_EOC",
+		ExpiresInMinutes: 90,
+	}
+
+	unauthorized := requestAdminJSON(
+		t, handler, http.MethodPost, "/admin/hazards", update, "wrong-key",
+	)
+	if unauthorized.Code != http.StatusUnauthorized {
+		t.Fatalf("expected unauthorized admin update, got %d", unauthorized.Code)
+	}
+
+	authorized := requestAdminJSON(
+		t,
+		handler,
+		http.MethodPost,
+		"/admin/hazards",
+		update,
+		string(testAuthenticationKey),
+	)
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("unexpected admin update response: %d %s", authorized.Code, authorized.Body)
+	}
+
+	stateRequest := httptest.NewRequest(http.MethodGet, "/admin/state", nil)
+	stateRequest.Header.Set("X-SMSWeb-Key", string(testAuthenticationKey))
+	stateResponse := httptest.NewRecorder()
+	handler.ServeHTTP(stateResponse, stateRequest)
+	if stateResponse.Code != http.StatusOK {
+		t.Fatalf("unexpected admin state response: %d %s", stateResponse.Code, stateResponse.Body)
+	}
+	var state adminState
+	if err := json.Unmarshal(stateResponse.Body.Bytes(), &state); err != nil {
+		t.Fatal(err)
+	}
+	if len(state.Hazards) == 0 || state.Hazards[0].Trust != "VERIFIED" {
+		t.Fatalf("expected a verified active hazard, got %#v", state.Hazards)
+	}
+	if len(state.Audit) == 0 || state.Audit[0].Action != "UPSERT_HAZARD" {
+		t.Fatalf("expected hazard audit entry, got %#v", state.Audit)
+	}
+}
+
+func TestIncomingHazardRequestReturnsSignedCompactHazards(t *testing.T) {
+	_, handler := newTestServer(t)
+	response := requestJSON(t, handler, http.MethodPost, "/sms/incoming", incomingSMS{
+		Sender: "+8801712345678",
+		Text:   "REQ|1|HZ99|HAZARD|DHK",
+	})
+	if response.Code != http.StatusOK {
+		t.Fatalf("unexpected status: %d %s", response.Code, response.Body)
+	}
+	var gateway gatewayResponse
+	if err := json.Unmarshal(response.Body.Bytes(), &gateway); err != nil {
+		t.Fatal(err)
+	}
+	if len(gateway.Messages) == 0 {
+		t.Fatal("expected at least one hazard response")
+	}
+	for _, message := range gateway.Messages {
+		if len(message) > 153 {
+			t.Fatalf("hazard SMS exceeds protocol limit: %d", len(message))
+		}
+		if !VerifyMessageSignature(message, testAuthenticationKey) {
+			t.Fatal("hazard response signature is invalid")
+		}
+		fields, err := splitFields(message)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(fields) != 12 || fields[3] != "HAZARD" {
+			t.Fatalf("unexpected hazard response fields: %#v", fields)
+		}
+	}
+}
+
+func TestJudgeDemoEndpointIsExplicitlyOptIn(t *testing.T) {
+	store, handler := newTestServer(t)
+	disabled := httptest.NewRecorder()
+	handler.ServeHTTP(disabled, httptest.NewRequest(http.MethodGet, "/demo/scenario", nil))
+	if disabled.Code != http.StatusNotFound {
+		t.Fatalf("demo endpoint should be disabled by default, got %d", disabled.Code)
+	}
+
+	enabledHandler := NewServerWithOptions(store, testAuthenticationKey, ServerOptions{
+		DemoEnabled: true,
+	})
+	enabled := httptest.NewRecorder()
+	enabledHandler.ServeHTTP(enabled, httptest.NewRequest(http.MethodGet, "/demo/scenario", nil))
+	if enabled.Code != http.StatusOK {
+		t.Fatalf("unexpected demo endpoint status: %d %s", enabled.Code, enabled.Body)
+	}
+	var scenario struct {
+		Mode     string             `json:"mode"`
+		Messages []string           `json:"messages"`
+		Location map[string]float64 `json:"location"`
+	}
+	if err := json.Unmarshal(enabled.Body.Bytes(), &scenario); err != nil {
+		t.Fatal(err)
+	}
+	if scenario.Mode != "DEMO" || len(scenario.Messages) < 3 {
+		t.Fatalf("unexpected demo scenario: %#v", scenario)
 	}
 }
 

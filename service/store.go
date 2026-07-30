@@ -21,24 +21,48 @@ type Message struct {
 }
 
 type Shelter struct {
-	Region     string
-	Location   string
-	Latitude   float64
-	Longitude  float64
-	Spaces     int
-	Status     string
-	Trust      string
-	Source     string
-	VerifiedAt int64
-	ExpiresAt  int64
+	Region     string  `json:"region"`
+	Location   string  `json:"location"`
+	Latitude   float64 `json:"latitude"`
+	Longitude  float64 `json:"longitude"`
+	Spaces     int     `json:"spaces"`
+	Status     string  `json:"status"`
+	Trust      string  `json:"trust"`
+	Source     string  `json:"source"`
+	VerifiedAt int64   `json:"verifiedAt"`
+	ExpiresAt  int64   `json:"expiresAt"`
 }
 
 type Alert struct {
-	AlertID  string
-	Priority string
-	Expires  int64
-	Region   string
-	Message  string
+	AlertID  string `json:"alertId"`
+	Priority string `json:"priority"`
+	Expires  int64  `json:"expiresAt"`
+	Region   string `json:"region"`
+	Message  string `json:"message"`
+}
+
+type Hazard struct {
+	HazardID    string  `json:"hazardId"`
+	Kind        string  `json:"kind"`
+	Region      string  `json:"region"`
+	Latitude    float64 `json:"latitude"`
+	Longitude   float64 `json:"longitude"`
+	Radius      int     `json:"radiusMeters"`
+	Severity    string  `json:"severity"`
+	RoadName    string  `json:"roadName"`
+	Description string  `json:"description"`
+	Trust       string  `json:"trust"`
+	Source      string  `json:"source"`
+	VerifiedAt  int64   `json:"verifiedAt"`
+	ExpiresAt   int64   `json:"expiresAt"`
+}
+
+type AuditEntry struct {
+	ID        int64  `json:"id"`
+	Action    string `json:"action"`
+	EntityID  string `json:"entityId"`
+	Detail    string `json:"detail"`
+	CreatedAt int64  `json:"createdAt"`
 }
 
 func OpenStore(path string) (*Store, error) {
@@ -92,8 +116,35 @@ CREATE TABLE IF NOT EXISTS alerts (
     message TEXT NOT NULL
 );
 
-INSERT OR IGNORE INTO alerts(alert_id, priority, expires_at, region, message) VALUES
-    ('F22P', 'HIGH', CAST(strftime('%s', 'now') AS INTEGER) + 86400, 'DHK', 'Avoid the road near Mirpur bridge');
+CREATE TABLE IF NOT EXISTS hazards (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    hazard_id TEXT NOT NULL UNIQUE,
+    kind TEXT NOT NULL,
+    region TEXT NOT NULL,
+    latitude REAL NOT NULL,
+    longitude REAL NOT NULL,
+    radius_meters INTEGER NOT NULL,
+    severity TEXT NOT NULL,
+    road_name TEXT NOT NULL,
+    description TEXT NOT NULL,
+    trust TEXT NOT NULL,
+    source TEXT NOT NULL,
+    verified_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    action TEXT NOT NULL,
+    entity_id TEXT NOT NULL,
+    detail TEXT NOT NULL,
+    created_at INTEGER NOT NULL
+);
+
+INSERT INTO alerts(alert_id, priority, expires_at, region, message) VALUES
+    ('F22P', 'HIGH', CAST(strftime('%s', 'now') AS INTEGER) + 86400, 'DHK', 'Avoid the road near Mirpur bridge')
+ON CONFLICT(alert_id) DO UPDATE SET
+    expires_at = CAST(strftime('%s', 'now') AS INTEGER) + 86400;
 `)
 	if err != nil {
 		return fmt.Errorf("initialize sqlite database: %w", err)
@@ -153,6 +204,23 @@ WHERE region = 'DHK'
 `, verifiedAt, expiresAt)
 	if err != nil {
 		return fmt.Errorf("refresh demo shelter metadata: %w", err)
+	}
+	_, err = store.db.Exec(`
+INSERT INTO hazards(
+    hazard_id, kind, region, latitude, longitude, radius_meters,
+    severity, road_name, description, trust, source, verified_at, expires_at
+) VALUES (
+    'HZD1', 'ROAD_CLOSED', 'DHK', 23.8125, 90.3687, 90,
+    'HIGH', 'Mirpur local road', 'Demonstration road closure',
+    'DEMO', 'SMSWEB_DEMO', ?, ?
+)
+ON CONFLICT(hazard_id) DO UPDATE SET
+    verified_at = excluded.verified_at,
+    expires_at = excluded.expires_at
+WHERE hazards.source = 'SMSWEB_DEMO'
+`, verifiedAt, expiresAt)
+	if err != nil {
+		return fmt.Errorf("refresh demo hazard metadata: %w", err)
 	}
 	return nil
 }
@@ -295,6 +363,141 @@ ORDER BY expires_at ASC
 		return nil, err
 	}
 	return alerts, nil
+}
+
+func (store *Store) FindActiveHazards(region string, now time.Time) ([]Hazard, error) {
+	rows, err := store.db.Query(`
+SELECT hazard_id, kind, region, latitude, longitude, radius_meters,
+       severity, road_name, description, trust, source, verified_at, expires_at
+FROM hazards
+WHERE expires_at > ? AND (region = ? OR region = '-')
+ORDER BY severity DESC, expires_at ASC
+`, now.Unix(), region)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var hazards []Hazard
+	for rows.Next() {
+		var hazard Hazard
+		if err := rows.Scan(
+			&hazard.HazardID,
+			&hazard.Kind,
+			&hazard.Region,
+			&hazard.Latitude,
+			&hazard.Longitude,
+			&hazard.Radius,
+			&hazard.Severity,
+			&hazard.RoadName,
+			&hazard.Description,
+			&hazard.Trust,
+			&hazard.Source,
+			&hazard.VerifiedAt,
+			&hazard.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		hazards = append(hazards, hazard)
+	}
+	return hazards, rows.Err()
+}
+
+func (store *Store) UpsertShelter(shelter Shelter) error {
+	_, err := store.db.Exec(`
+INSERT INTO shelters(
+    region, location, latitude, longitude, spaces, status,
+    trust, source, verified_at, expires_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(region, location) DO UPDATE SET
+    latitude = excluded.latitude,
+    longitude = excluded.longitude,
+    spaces = excluded.spaces,
+    status = excluded.status,
+    trust = excluded.trust,
+    source = excluded.source,
+    verified_at = excluded.verified_at,
+    expires_at = excluded.expires_at
+`, shelter.Region, shelter.Location, shelter.Latitude, shelter.Longitude,
+		shelter.Spaces, shelter.Status, shelter.Trust, shelter.Source,
+		shelter.VerifiedAt, shelter.ExpiresAt)
+	return err
+}
+
+func (store *Store) UpsertHazard(hazard Hazard) error {
+	_, err := store.db.Exec(`
+INSERT INTO hazards(
+    hazard_id, kind, region, latitude, longitude, radius_meters,
+    severity, road_name, description, trust, source, verified_at, expires_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(hazard_id) DO UPDATE SET
+    kind = excluded.kind,
+    region = excluded.region,
+    latitude = excluded.latitude,
+    longitude = excluded.longitude,
+    radius_meters = excluded.radius_meters,
+    severity = excluded.severity,
+    road_name = excluded.road_name,
+    description = excluded.description,
+    trust = excluded.trust,
+    source = excluded.source,
+    verified_at = excluded.verified_at,
+    expires_at = excluded.expires_at
+`, hazard.HazardID, hazard.Kind, hazard.Region, hazard.Latitude,
+		hazard.Longitude, hazard.Radius, hazard.Severity, hazard.RoadName,
+		hazard.Description, hazard.Trust, hazard.Source, hazard.VerifiedAt,
+		hazard.ExpiresAt)
+	return err
+}
+
+func (store *Store) UpsertAlert(alert Alert) error {
+	_, err := store.db.Exec(`
+INSERT INTO alerts(alert_id, priority, expires_at, region, message)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(alert_id) DO UPDATE SET
+    priority = excluded.priority,
+    expires_at = excluded.expires_at,
+    region = excluded.region,
+    message = excluded.message
+`, alert.AlertID, alert.Priority, alert.Expires, alert.Region, alert.Message)
+	return err
+}
+
+func (store *Store) SaveAudit(action, entityID, detail string, createdAt int64) error {
+	_, err := store.db.Exec(`
+INSERT INTO audit_log(action, entity_id, detail, created_at)
+VALUES (?, ?, ?, ?)
+`, action, entityID, detail, createdAt)
+	return err
+}
+
+func (store *Store) RecentAudit(limit int) ([]AuditEntry, error) {
+	rows, err := store.db.Query(`
+SELECT id, action, entity_id, detail, created_at
+FROM audit_log
+ORDER BY id DESC
+LIMIT ?
+`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var entries []AuditEntry
+	for rows.Next() {
+		var entry AuditEntry
+		if err := rows.Scan(
+			&entry.ID,
+			&entry.Action,
+			&entry.EntityID,
+			&entry.Detail,
+			&entry.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		entries = append(entries, entry)
+	}
+	return entries, rows.Err()
 }
 
 func (store *Store) MessageCount() (int, error) {

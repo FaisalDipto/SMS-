@@ -25,9 +25,22 @@
       </section>
 
       <section class="gateway-card" aria-labelledby="gateway-title">
+        <div id="role-selector" class="role-selector" aria-labelledby="app-role-title">
+          <div>
+            <strong id="app-role-title">This phone’s role</strong>
+            <p id="app-role-description">Choose User for a personal phone or Gateway for the service phone.</p>
+          </div>
+          <div class="role-selector-controls">
+            <select id="app-role" aria-label="Application role">
+              <option value="USER">User phone</option>
+              <option value="GATEWAY">SMS gateway phone</option>
+            </select>
+            <button id="save-app-role" type="button">Use this role</button>
+          </div>
+        </div>
         <div class="gateway-card-header">
           <div>
-            <p class="eyebrow">Gateway connection</p>
+            <p id="gateway-eyebrow" class="eyebrow">Gateway connection</p>
             <h2 id="gateway-title">Raspberry Pi service</h2>
           </div>
           <span id="gateway-connection-badge" class="connection-badge connection-unknown">Not checked</span>
@@ -45,12 +58,14 @@
           <p class="administrator-note">
             These settings are configured once by the deployment operator, not by people requesting crisis information.
           </p>
-          <label for="pi-url">Raspberry Pi local URL</label>
-          <input id="pi-url" type="url" inputmode="url" placeholder="http://192.168.43.1:8080" />
-          <div class="gateway-actions">
-            <button id="save-pi-url" type="button">Save URL</button>
-            <button id="check-pi-connection" type="button">Check connection</button>
-            <p id="gateway-status" role="status" aria-live="polite"></p>
+          <div class="gateway-only">
+            <label for="pi-url">Raspberry Pi local URL</label>
+            <input id="pi-url" type="url" inputmode="url" placeholder="http://192.168.43.1:8080" />
+            <div class="gateway-actions">
+              <button id="save-pi-url" type="button">Save URL</button>
+              <button id="check-pi-connection" type="button">Check connection</button>
+              <p id="gateway-status" role="status" aria-live="polite"></p>
+            </div>
           </div>
           <div id="authentication-key-controls">
             <label for="authentication-key">Shared response authentication key</label>
@@ -63,7 +78,7 @@
           <button id="replace-authentication-key" class="secondary-action" type="button" hidden>
             Replace authentication key
           </button>
-          <label for="service-number">Gateway SMS number</label>
+          <label for="service-number">SMSWeb service number</label>
           <input id="service-number" type="tel" inputmode="tel" placeholder="+8801XXXXXXXXX" />
           <div class="gateway-actions">
             <button id="save-service-number" type="button">Save number</button>
@@ -73,34 +88,122 @@
         <div class="gateway-actions request-actions">
           <button id="request-shelters" type="button">Request shelters</button>
           <button id="request-alerts" type="button">Request alerts</button>
+          <button id="request-hazards" type="button">Request hazards</button>
           <p id="request-status" role="status" aria-live="polite"></p>
         </div>
+      </section>
+
+      <details id="authority-console" class="authority-console">
+        <summary>Authority operations console</summary>
+        <div class="authority-intro">
+          <div>
+            <p class="eyebrow">Authenticated publishing</p>
+            <h2>Update crisis information</h2>
+          </div>
+          <p>
+            For deployment operators only. Updates are validated and signed by the local service
+            before they can affect routing.
+          </p>
+        </div>
+        <label id="authority-key-label" for="authority-key">Local service administrator key</label>
+        <input id="authority-key" type="password" autocomplete="off"
+          placeholder="Required only in the desktop judge demo" />
+
+        <div class="authority-forms">
+          <form data-authority-form="shelter">
+            <h3>Shelter capacity</h3>
+            <div class="form-grid">
+              <label>Location <input name="location" value="MIRPUR" required /></label>
+              <label>Region <input name="region" value="DHK" required /></label>
+              <label>Latitude <input name="latitude" type="number" step="0.000001" value="23.8069" required /></label>
+              <label>Longitude <input name="longitude" type="number" step="0.000001" value="90.3687" required /></label>
+              <label>Spaces <input name="spaces" type="number" min="0" value="120" required /></label>
+              <label>Status
+                <select name="status"><option>OPEN</option><option>FULL</option><option>CLOSED</option></select>
+              </label>
+              <label>Source <input name="source" value="DHK_EOC" required /></label>
+              <label>Valid minutes <input name="expiresInMinutes" type="number" min="1" value="120" required /></label>
+            </div>
+            <button type="submit">Publish shelter update</button>
+          </form>
+
+          <form data-authority-form="hazard">
+            <h3>Road hazard</h3>
+            <div class="form-grid">
+              <label>Hazard ID <input name="hazardId" value="HZD2" required /></label>
+              <label>Kind
+                <select name="kind"><option>ROAD_CLOSED</option><option>FLOOD</option><option>FIRE</option><option>UNSAFE</option></select>
+              </label>
+              <label>Region <input name="region" value="DHK" required /></label>
+              <label>Severity
+                <select name="severity"><option>HIGH</option><option>CRITICAL</option><option>MEDIUM</option><option>LOW</option></select>
+              </label>
+              <label>Latitude <input name="latitude" type="number" step="0.000001" value="23.8125" required /></label>
+              <label>Longitude <input name="longitude" type="number" step="0.000001" value="90.3687" required /></label>
+              <label>Radius metres <input name="radiusMeters" type="number" min="10" max="2000" value="90" required /></label>
+              <label>Road name <input name="roadName" value="Mirpur Road" maxlength="32" required /></label>
+              <label class="form-wide">Description <input name="description" value="Road closed by emergency services" maxlength="120" required /></label>
+              <label>Source <input name="source" value="DHK_EOC" required /></label>
+              <label>Valid minutes <input name="expiresInMinutes" type="number" min="1" value="60" required /></label>
+            </div>
+            <button type="submit">Publish hazard</button>
+          </form>
+
+          <form data-authority-form="alert">
+            <h3>Emergency alert</h3>
+            <div class="form-grid">
+              <label>Alert ID <input name="alertId" value="ALT2" required /></label>
+              <label>Priority
+                <select name="priority"><option>HIGH</option><option>CRITICAL</option><option>MEDIUM</option><option>LOW</option></select>
+              </label>
+              <label>Region <input name="region" value="DHK" required /></label>
+              <label>Valid minutes <input name="expiresInMinutes" type="number" min="1" value="60" required /></label>
+              <label class="form-wide">Message <input name="message" value="Avoid Mirpur Road and follow emergency instructions" maxlength="80" required /></label>
+            </div>
+            <button type="submit">Publish alert</button>
+          </form>
+        </div>
+        <p id="authority-status" role="status" aria-live="polite">
+          No operator update has been submitted in this session.
+        </p>
+      </details>
+
+      <section id="judge-demo" class="judge-demo" hidden aria-labelledby="judge-demo-title">
+        <p class="eyebrow">Judge quick start</p>
+        <h2 id="judge-demo-title">Run the offline crisis scenario</h2>
+        <p>
+          Loads signed demonstration shelter, alert, and road-hazard messages, then opens
+          the map at a simulated Mirpur location.
+        </p>
+        <button id="run-judge-demo" type="button">Run 60-second demo</button>
+        <p id="judge-demo-status" role="status" aria-live="polite"></p>
       </section>
 
       <nav id="app-nav" class="app-nav" aria-label="Main navigation">
         <button type="button" data-page="HOME" aria-current="page">Home</button>
         <button type="button" data-page="SHELTER" aria-current="false">Shelters</button>
         <button type="button" data-page="ALERTS" aria-current="false">Alerts</button>
+        <button type="button" data-page="HAZARDS" aria-current="false">Hazards</button>
         <button type="button" data-page="MAP" aria-current="false">Map</button>
         <button type="button" data-page="ACTIVITY" aria-current="false">Activity</button>
       </nav>
 
       <section id="app-view" aria-live="polite"></section>
 
-      <section class="simulator-card" aria-labelledby="simulator-title">
-        <p class="eyebrow">Developer mode</p>
-        <h2 id="simulator-title">SMS simulator</h2>
-        <p>
-          Paste a structured SMS response here while the Android gateway and
-          Raspberry Pi service are being built.
-        </p>
-        <label for="sms-input">SMS response</label>
-        <textarea id="sms-input" rows="4">RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN;DU:23.7271:90.3944:0:FULL</textarea>
-        <div class="simulator-actions">
-          <button id="parse-sms" type="button">Parse and render</button>
-          <p id="simulator-status" role="status" aria-live="polite"></p>
-        </div>
-      </section>
+      <details class="developer-tools">
+        <summary>Developer tools</summary>
+        <section class="simulator-card" aria-labelledby="simulator-title">
+          <p class="eyebrow">Protocol simulator</p>
+          <h2 id="simulator-title">SMS response parser</h2>
+          <p>Paste a structured response to test parsing without a second phone.</p>
+          <label for="sms-input">SMS response</label>
+          <textarea id="sms-input" rows="4">RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:23.8069:90.3687:120:OPEN;UTTARA:23.8759:90.4002:80:OPEN;DU:23.7271:90.3944:0:FULL</textarea>
+          <div class="simulator-actions">
+            <button id="parse-sms" type="button">Parse and render</button>
+            <p id="simulator-status" role="status" aria-live="polite"></p>
+          </div>
+        </section>
+      </details>
     </main>
 
     <script src="vendor/maplibre/maplibre-gl.js"></script>
@@ -110,6 +213,7 @@
     <script src="storage.js"></script>
     <script src="multipart.js"></script>
     <script src="geo.js"></script>
+    <script src="hazards.js"></script>
     <script src="routing.js"></script>
     <script src="data/mirpur-road-graph.js"></script>
     <script src="map.js"></script>
@@ -117,6 +221,8 @@
     <script src="navigation.js"></script>
     <script src="simulator.js"></script>
     <script src="gateway.js"></script>
+    <script src="admin.js"></script>
+    <script src="demo.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

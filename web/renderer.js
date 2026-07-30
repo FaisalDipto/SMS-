@@ -156,7 +156,9 @@
   function renderHomePage(page = {}, now = Date.now()) {
     const cards = Array.isArray(page.cards) ? page.cards : [
       { page: 'SHELTER', title: 'Find shelters', description: 'View the latest available shelter spaces.' },
-      { page: 'ALERTS', title: 'Emergency alerts', description: 'Review warnings received by SMS.' }
+      { page: 'ALERTS', title: 'Emergency alerts', description: 'Review warnings received by SMS.' },
+      { page: 'HAZARDS', title: 'Road hazards', description: 'See authenticated closures and danger zones.' },
+      { page: 'MAP', title: 'Safe route map', description: 'Route on the bundled offline road graph.' }
     ];
     const body = `<p class="page-summary">${escapeHtml(page.message || 'Choose an information page to get started.')}</p>
       <div class="info-card-grid">
@@ -296,8 +298,52 @@
     });
   }
 
+  function renderHazardsPage(hazards, now = Date.now()) {
+    const records = Array.isArray(hazards) ? hazards : [];
+    const body = records.length === 0
+      ? '<p class="empty-state">No current authenticated road hazards are available.</p>'
+      : `<ul class="resource-list hazard-list">
+          ${records.map((hazard) => {
+            const authenticated =
+              String(hazard.authentication || '').toUpperCase() === 'AUTHENTICATED';
+            return `<li class="resource-item hazard-item priority-${escapeHtml(
+              String(hazard.severity || 'UNKNOWN').toLowerCase()
+            )}">
+              <div>
+                <p class="alert-priority">${escapeHtml(hazard.severity || 'UNKNOWN')}</p>
+                <p class="trust-badge">${authenticated ? 'Authenticated hazard' : 'Unverified hazard'}</p>
+                <h3>${escapeHtml(String(hazard.kind || 'HAZARD').replaceAll('_', ' '))}</h3>
+                <p>${escapeHtml(hazard.roadName || 'Unnamed road')}</p>
+                <p>${escapeHtml(`${hazard.radiusMeters || 0} m avoidance radius`)}</p>
+              </div>
+              ${renderFreshness(hazard.expiresAt, now)}
+            </li>`;
+          }).join('')}
+        </ul>`;
+    const record = {
+      receivedAt: records.reduce((latest, hazard) =>
+        Math.max(latest, toMilliseconds(hazard.receivedAt) || 0), 0),
+      expiresAt: records.reduce((earliest, hazard) => {
+        const expiry = toMilliseconds(hazard.expiresAt);
+        return expiry === null ? earliest : Math.min(earliest, expiry);
+      }, Number.MAX_SAFE_INTEGER)
+    };
+    if (record.receivedAt === 0) delete record.receivedAt;
+    if (record.expiresAt === Number.MAX_SAFE_INTEGER) delete record.expiresAt;
+    return renderPageFrame({
+      pageClass: 'page-view-hazards',
+      title: 'Road Hazards',
+      region: records[0]?.region || 'DHK',
+      record,
+      now,
+      body
+    });
+  }
+
   function renderMapPage(page = {}, now = Date.now()) {
     const shelters = parseShelterPayload(page.payload ?? page.content ?? '');
+    const hazards = (Array.isArray(page.hazards) ? page.hazards : [])
+      .filter((hazard) => Number.isFinite(hazard.expiresAt) && hazard.expiresAt > now);
     const bounds = { minLatitude: 23.70, maxLatitude: 23.90, minLongitude: 90.34, maxLongitude: 90.43 };
     const markerRecords = shelters
       .map((shelter) => ({
@@ -326,6 +372,25 @@
     const unknownLocations = shelters.filter((shelter) =>
       shelter.latitude === undefined && !SHELTER_COORDINATES[shelter.location]
     );
+    const hazardMarkers = hazards.map((hazard) => {
+      const left = ((hazard.longitude - bounds.minLongitude) /
+        (bounds.maxLongitude - bounds.minLongitude)) * 100;
+      const top = ((bounds.maxLatitude - hazard.latitude) /
+        (bounds.maxLatitude - bounds.minLatitude)) * 100;
+      return `<button type="button" class="map-hazard-marker"
+        style="left:${left.toFixed(2)}%;top:${top.toFixed(2)}%"
+        data-map-hazard="${escapeHtml(hazard.hazardId)}"
+        data-map-hazard-kind="${escapeHtml(hazard.kind)}"
+        data-map-hazard-road="${escapeHtml(hazard.roadName)}"
+        data-map-hazard-severity="${escapeHtml(hazard.severity)}"
+        data-map-hazard-radius="${escapeHtml(hazard.radiusMeters)}"
+        data-map-hazard-latitude="${escapeHtml(hazard.latitude)}"
+        data-map-hazard-longitude="${escapeHtml(hazard.longitude)}"
+        data-map-hazard-expires="${escapeHtml(hazard.expiresAt)}"
+        data-map-hazard-authentication="${escapeHtml(hazard.authentication || 'UNVERIFIED')}"
+        title="${escapeHtml(`${hazard.kind} on ${hazard.roadName}`)}"
+        aria-label="${escapeHtml(`${hazard.severity} ${hazard.kind} on ${hazard.roadName}`)}"></button>`;
+    }).join('');
     const expiresAt = toMilliseconds(page.expiresAt);
     const authenticated = String(page.authentication || '').toUpperCase() === 'AUTHENTICATED';
     const canRoute = authenticated && expiresAt !== null && expiresAt > now;
@@ -355,6 +420,7 @@
         </svg>
         <div class="map-label">Loading detailed greater Dhaka map...</div>
         ${markers || '<p>No shelters with bundled coordinates are available.</p>'}
+        ${hazardMarkers}
       </div>
       <div class="map-controls" aria-label="Map controls">
         <button id="map-zoom-in" type="button" aria-label="Zoom in">+</button>
@@ -367,8 +433,11 @@
       </div>
       <div class="map-summary">
         <span>${markerRecords.length > 0 ? `${markerRecords.length} shelter markers` : 'No shelter markers'}</span>
-        <span>Offline coordinates</span>
+        <span>${hazards.length} active hazard${hazards.length === 1 ? '' : 's'}</span>
       </div>
+      <p class="hazard-routing-note">${hazards.length > 0
+        ? `${hazards.length} current hazard zone${hazards.length === 1 ? '' : 's'} loaded. Authenticated zones are excluded from route calculation.`
+        : 'No current hazard zones are loaded; routes use the available road graph.'}</p>
       <div class="map-distance-panel">
         <button id="map-locate" type="button">Use my location</button>
         <p id="map-location-status" class="map-note">Allow location access to calculate straight-line distances.</p>
@@ -402,22 +471,29 @@
 
   function renderActivityPage(messages = [], now = Date.now()) {
     const records = Array.isArray(messages) ? messages : [];
-    const body = records.length === 0
+    const activity = records.length === 0
       ? '<p class="empty-state">No SMS activity has been recorded yet.</p>'
       : `<ul class="activity-list">
           ${records.map((message) => {
-            const direction = message.direction === 'outgoing' ? 'Sent request' : 'Received response';
-            const status = String(message.status || 'unknown').toUpperCase();
+            const gatewayEvent = Boolean(message.state);
+            const direction = gatewayEvent
+              ? 'Gateway event'
+              : message.direction === 'outgoing' ? 'Sent request' : 'Received response';
+            const status = String(message.state || message.status || 'unknown').toUpperCase();
+            const content = gatewayEvent ? message.detail : message.rawText;
             return `<li class="activity-item">
               <div>
                 <p class="activity-direction">${escapeHtml(direction)}</p>
                 <p class="activity-status">${escapeHtml(status)} · ${escapeHtml(message.requestId || 'unknown ID')}</p>
-                <code>${escapeHtml(message.rawText || '')}</code>
+                <code>${escapeHtml(content || '')}</code>
               </div>
               <time>${escapeHtml(formatTimestamp(message.createdAt))}</time>
             </li>`;
           }).join('')}
         </ul>`;
+    const body = `${activity}
+      <button id="activity-retry" class="activity-retry" type="button">Retry queued gateway messages</button>
+      <p id="activity-retry-status" class="map-note" role="status" aria-live="polite"></p>`;
     const latest = records.reduce((latestTime, message) =>
       Math.max(latestTime, toMilliseconds(message.createdAt) || 0), 0);
 
@@ -465,6 +541,7 @@
     renderHomePage,
     renderShelterPage,
     renderAlertsPage,
+    renderHazardsPage,
     renderMapPage,
     renderActivityPage,
     renderPage,

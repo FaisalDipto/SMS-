@@ -11,8 +11,20 @@ class GatewayCoordinator(private val context: Context) {
     private val pi = PiHttpClient(context)
 
     fun acceptIncomingSms(sender: String, text: String, subscriptionId: Int) {
-        if (!GatewayConfig.isSenderAllowed(context, sender) || !SmsProtocol.isRequest(text)) return
-        if (!database.enqueueToPi(sender, text, subscriptionId)) return
+        val requestId = SmsProtocol.messageId(text)
+        if (!GatewayConfig.isSenderAllowed(context, sender)) {
+            database.recordEvent(requestId, "REJECTED", "SMS sender is not on the gateway allowlist.")
+            return
+        }
+        if (!SmsProtocol.isRequest(text)) {
+            database.recordEvent(requestId, "REJECTED", "SMS did not match the request protocol.")
+            return
+        }
+        if (!database.enqueueToPi(sender, text, subscriptionId)) {
+            database.recordEvent(requestId, "DUPLICATE", "Duplicate request was ignored.")
+            return
+        }
+        database.recordEvent(requestId, "RECEIVED", "Request received by the Android gateway.")
         flush()
     }
 
@@ -23,12 +35,22 @@ class GatewayCoordinator(private val context: Context) {
             try {
                 val response = pi.incoming(item.sender, item.text)
                 database.markForwarded(item.id)
+                database.recordEvent(
+                    SmsProtocol.messageId(item.text),
+                    "FORWARDED",
+                    "Request accepted by the Raspberry Pi service."
+                )
                 response.messages.forEach { responseText ->
                     val authentication = MessageAuthenticator.verify(
                         responseText,
                         GatewayConfig.authenticationKey(context)
                     )
                     if (authentication.status != AuthenticationStatus.AUTHENTICATED) {
+                        database.recordEvent(
+                            SmsProtocol.messageId(responseText),
+                            "REJECTED",
+                            authentication.reason
+                        )
                         broadcastSecurityRejection(authentication.reason)
                         return@forEach
                     }
@@ -38,6 +60,11 @@ class GatewayCoordinator(private val context: Context) {
                             authentication.replayExpiresAt
                         )
                     ) {
+                        database.recordEvent(
+                            SmsProtocol.messageId(responseText),
+                            "REJECTED",
+                            "Replayed authenticated response was blocked."
+                        )
                         broadcastSecurityRejection("A replayed authenticated response was blocked.")
                         return@forEach
                     }
@@ -48,6 +75,11 @@ class GatewayCoordinator(private val context: Context) {
                             AuthenticationStatus.AUTHENTICATED.name
                         )
                     ) {
+                        database.recordEvent(
+                            SmsProtocol.messageId(responseText),
+                            "AUTHENTICATED",
+                            "Signed response verified and queued for SMS delivery."
+                        )
                         context.sendBroadcast(Intent(GatewayEvents.ACTION_PI_RESPONSE).apply {
                             setPackage(context.packageName)
                             putExtra(GatewayEvents.EXTRA_REQUEST_ID, SmsProtocol.messageId(responseText))
@@ -59,8 +91,13 @@ class GatewayCoordinator(private val context: Context) {
                         })
                     }
                 }
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 database.markRetry(item.id)
+                database.recordEvent(
+                    SmsProtocol.messageId(item.text),
+                    "RETRY",
+                    "Pi forwarding failed: ${error.message ?: "connection error"}"
+                )
                 retryNeeded = true
             }
         }
@@ -68,6 +105,11 @@ class GatewayCoordinator(private val context: Context) {
         database.pending("TO_USER").forEach { item ->
             if (item.authentication != AuthenticationStatus.AUTHENTICATED.name) {
                 database.markRejected(item.id)
+                database.recordEvent(
+                    SmsProtocol.messageId(item.text),
+                    "REJECTED",
+                    "Legacy unauthenticated queued response was blocked."
+                )
                 broadcastSecurityRejection("A legacy unauthenticated queued response was blocked.")
                 return@forEach
             }
@@ -79,10 +121,16 @@ class GatewayCoordinator(private val context: Context) {
                 )
                 database.markSent(item.id)
                 SmsProtocol.messageId(item.text)?.let { requestId ->
+                    database.recordEvent(requestId, "HANDOFF", "Response SMS handed to Android for delivery.")
                     runCatching { pi.responseStatus(requestId, "sent") }
                 }
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 database.markRetry(item.id)
+                database.recordEvent(
+                    SmsProtocol.messageId(item.text),
+                    "RETRY",
+                    "SMS delivery failed: ${error.message ?: "transport error"}"
+                )
                 retryNeeded = true
             }
         }

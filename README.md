@@ -8,6 +8,29 @@ The system is designed for situations where mobile data or Wi-Fi internet is una
 
 > Important limitation: a normal browser cannot read incoming SMS directly. A small Android companion application is required to read SMS and pass the content to the local web interface. The website itself can still be written with ordinary HTML, CSS, and JavaScript.
 
+## Quick Judge Demo
+
+The packaged Windows demo proves the parser, storage, trust labels, hazard layer,
+and route calculation without requiring Android Studio or two SIM cards.
+
+1. Extract `dist/SMSWeb-Judge-Demo.zip`.
+2. Double-click `Start SMSWeb Demo.cmd`.
+3. Wait for `http://127.0.0.1:8080` to open.
+4. Select **Run 60-second demo**.
+5. On **Map**, select **Find route to nearest open shelter**.
+6. Inspect **Hazards** and **Activity** to explain why the selected route is trusted
+   and which local records produced it.
+
+The banner and records explicitly say **demo**. This path is for judging and
+training; it does not pretend the bundled shelter records came from an emergency
+authority.
+
+To rebuild the judge package after changing the source:
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\build-judge-package.ps1 -IncludeApk
+```
+
 ## 1. Project Goals
 
 SMSWeb should:
@@ -556,7 +579,12 @@ SHELTER + DHK
   -> return response to SMS adapter
 ```
 
-Use SQLite or JSON files for the first version. Add an administrator interface later for updating shelter and alert data.
+The current Go service uses SQLite and exposes authenticated administrator
+updates for shelters, alerts, and hazards. The dashboard's
+**Authority operations console** calls those endpoints through the native
+Android bridge, so the shared key remains in app-private storage rather than
+being returned to JavaScript. The desktop judge build accepts the key only in
+memory for local operator testing.
 
 ### Step 9: Add the Android SMS bridge
 
@@ -1008,3 +1036,142 @@ The 30-hour MVP is successful when it can:
 - Automated conflict resolution across many disconnected devices
 
 The objective of the 30-hour version is to demonstrate the complete end-to-end pipeline, not to build a production emergency-response platform.
+
+## 17. Current Runbook
+
+### A. Run the Go service on Windows
+
+Open Git Bash in the project root:
+
+```bash
+cd service
+export SMSWEB_AUTH_KEY='replace-with-one-private-key-at-least-16-characters'
+go run . -addr :8080 -db smsweb.db
+```
+
+Keep that terminal open. A successful startup ends with:
+
+```text
+SMSWeb crisis service listening on :8080
+```
+
+Check it from Postman or a browser:
+
+```text
+GET http://localhost:8080/health
+```
+
+Expected JSON:
+
+```json
+{"status":"ok"}
+```
+
+If the Android phone is connected through the PC's Wi-Fi or hotspot, run
+`ipconfig`, find the PC IPv4 address on that network, and use
+`http://PC-IP:8080` in the Android app. `localhost` on the phone means the phone,
+not the PC.
+
+### B. Build and run the Android gateway
+
+1. Open the `android-bridge` folder in Android Studio.
+2. Wait for Gradle sync to finish.
+3. Connect the Android gateway phone with USB debugging enabled.
+4. Select the phone and the `app` run configuration in the toolbar.
+5. Select the green Run triangle.
+6. Allow SMS and location permissions.
+7. Open **Administrator setup**.
+8. Provision exactly the same key used for `SMSWEB_AUTH_KEY`.
+9. Save `http://PC-IP:8080` as the Pi URL and select **Check connection**.
+10. Save the gateway phone's own SMS number.
+
+The key is entered by the deployment operator once. A person requesting shelter
+information does not enter or receive it. Android stores it in app-private
+preferences, uses it to verify Pi signatures and authorize local operator
+updates, and does not expose a JavaScript getter for it.
+
+### B2. Configure a user phone
+
+The same APK now supports a separate **User phone** role:
+
+1. Install the APK on the resident/test phone.
+2. In **This phone's role**, select **User phone** and tap **Use this role**.
+3. Under **User device setup**, set the SMSWeb service number to the gateway
+   phone's SIM number.
+4. For this hackathon build, provision the same response authentication key
+   during controlled installation.
+5. The Pi URL and authority console are hidden in User mode.
+6. Tap **Request shelters**, **Request alerts**, or **Request hazards**.
+7. When the response SMS returns from the configured gateway number, the app
+   verifies it, blocks replays, stores it offline, and renders the relevant page.
+
+The shared-key step makes the two-phone hackathon demonstration functional, but
+it is not suitable for a publicly distributed client: extracting one public
+client's shared secret would compromise trust for every client. A production
+version must replace HMAC client verification with asymmetric signatures, where
+the service keeps a private signing key and user phones contain only a public
+verification key.
+
+### C. Real two-phone SMS test
+
+1. Keep the Go service and the first Android phone in **SMS gateway phone** mode.
+2. Put the second Android phone in **User phone** mode.
+3. On the user phone, tap **Request shelters**, or send this to the gateway:
+
+   ```text
+   REQ|1|LIVE1|SHELTER|DHK
+   ```
+
+4. The gateway forwards the request to the local service.
+5. The service returns signed multipart shelter data.
+6. The gateway verifies the signature, sends the response SMS, and records
+   `RECEIVED`, `FORWARDED`, `AUTHENTICATED`, and `HANDOFF` events.
+7. The user phone independently verifies and renders the response.
+8. Open **Shelters**, **Map**, and **Activity** on the user phone.
+9. On **Map**, select **Use my location**, then
+   **Find route to nearest open shelter**.
+
+Request current road hazards with:
+
+```text
+REQ|1|LIVE2|HAZARD|DHK
+```
+
+Authenticated, unexpired hazard circles block intersecting road-graph edges.
+Expired, demo-only, or unauthenticated records remain visibly labelled and do
+not silently become trusted emergency facts.
+
+### D. Publish an operator update
+
+In the Android dashboard, expand **Authority operations console**. Publish a
+shelter, alert, or hazard. The native bridge sends the JSON update to the Pi
+with the privately stored key. The Go service validates coordinates, values,
+expiry, identifiers, and allowed hazard types, then writes an audit entry.
+Subsequent SMS requests include the update.
+
+For direct Postman testing, send `X-SMSWeb-Key` with the operator key to:
+
+```text
+POST /admin/shelters
+POST /admin/alerts
+POST /admin/hazards
+GET  /admin/state
+```
+
+### E. Honest prototype limitations
+
+- The offline vector basemap covers greater Dhaka, but road routing is still
+  limited to the bundled Mirpur graph. This is not full-Dhaka navigation.
+- Shelter coordinates and entrances must be supplied and field-checked by a
+  responsible authority before real use.
+- The symmetric shared key proves that a response came from the configured
+  local service. It is not a national authority identity system, key rotation
+  service, or multi-role authorization model. Provisioning that secret on user
+  phones is acceptable only for this controlled demo; public deployment
+  requires asymmetric signatures.
+- `HANDOFF` means Android accepted the SMS for transmission; it is not a
+  carrier delivery receipt.
+- Hazard avoidance is geometric intersection against a local graph. It needs
+  wider, maintained road data and field validation before emergency deployment.
+- The project is a working hackathon prototype, not a certified public-safety
+  system.

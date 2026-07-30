@@ -24,6 +24,17 @@ test('serializes an alert request', () => {
   assert.equal(protocol.parseRequest(rawText).command, 'ALERT');
 });
 
+test('serializes a hazard request', () => {
+  const rawText = protocol.serializeRequest({
+    requestId: 'HZ91',
+    command: 'HAZARD',
+    arguments: 'DHK'
+  });
+
+  assert.equal(rawText, 'REQ|1|HZ91|HAZARD|DHK');
+  assert.equal(protocol.parseRequest(rawText).command, 'HAZARD');
+});
+
 test('serializes requests and escapes delimiter characters', () => {
   const request = {
     requestId: 'A17K',
