@@ -19,6 +19,9 @@
     requestSheltersButton: document.querySelector('#request-shelters'),
     requestAlertsButton: document.querySelector('#request-alerts'),
     requestStatusElement: document.querySelector('#request-status'),
+    authenticationKeyInput: document.querySelector('#authentication-key'),
+    saveAuthenticationKeyButton: document.querySelector('#save-authentication-key'),
+    authenticationStatusElement: document.querySelector('#authentication-status'),
     onRequest: async (request) => {
       await window.SMSWeb.storage.saveMessage({
         requestId: request.requestId,
@@ -44,9 +47,15 @@
     appView
   });
 
-  window.SMSWeb.gateway.setIncomingHandler(async (rawText) => {
+  window.SMSWeb.gateway.setIncomingHandler(async (rawText, authentication) => {
     try {
-      const result = await simulator.handleSms(rawText, appView, Date.now(), 'android-gateway');
+      const result = await simulator.handleSms(
+        rawText,
+        appView,
+        Date.now(),
+        'android-gateway',
+        authentication
+      );
       statusMessage.textContent = result;
       window.smsWeb?.acknowledgeResponse?.(rawText);
     } catch (error) {

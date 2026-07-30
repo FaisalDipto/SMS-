@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var testAuthenticationKey = []byte("smsweb-test-key-2026")
+
 func newTestServer(t *testing.T) (*Store, http.Handler) {
 	t.Helper()
 	store, err := OpenStore("file:test-smsweb?mode=memory&cache=shared")
@@ -20,7 +22,7 @@ func newTestServer(t *testing.T) (*Store, http.Handler) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = store.Close() })
-	return store, NewServer(store)
+	return store, NewServer(store, testAuthenticationKey)
 }
 
 func requestJSON(t *testing.T, handler http.Handler, method, path string, payload any) *httptest.ResponseRecorder {
@@ -75,14 +77,17 @@ func TestIncomingShelterRequest(t *testing.T) {
 	var firstFields []string
 	for index, message := range gateway.Messages {
 		if len(message) > 153 {
-			t.Fatalf("protocol message %d exceeds concatenated GSM segment size: %d", index+1, len(message))
+			t.Fatalf("signed protocol message %d exceeds concatenated GSM segment size: %d", index+1, len(message))
+		}
+		if !VerifyMessageSignature(message, testAuthenticationKey) {
+			t.Fatalf("protocol message %d has an invalid signature", index+1)
 		}
 		fields, err := splitFields(message)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(fields) != 11 {
-			t.Fatalf("expected metadata response fields, got %d", len(fields))
+		if len(fields) != 12 {
+			t.Fatalf("expected metadata and signature response fields, got %d", len(fields))
 		}
 		expectedPart := fmt.Sprintf("%d/%d", index+1, len(gateway.Messages))
 		if fields[4] != expectedPart {
@@ -170,6 +175,33 @@ func TestIncomingAlertRequest(t *testing.T) {
 	}
 	if !strings.HasPrefix(gateway.Text, "ALT|1|F22P|HIGH|") {
 		t.Fatalf("unexpected alert response: %s", gateway.Text)
+	}
+	if !VerifyMessageSignature(gateway.Text, testAuthenticationKey) {
+		t.Fatalf("expected signed alert response: %s", gateway.Text)
+	}
+}
+
+func TestMessageAuthenticationRejectsTamperingAndWeakKeys(t *testing.T) {
+	message := "RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|100|200|MIRPUR:120:OPEN"
+	signed, err := SignMessage(message, testAuthenticationKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !VerifyMessageSignature(signed, testAuthenticationKey) {
+		t.Fatal("expected valid signed message")
+	}
+	for _, tampered := range []string{
+		strings.Replace(signed, "120", "999", 1),
+		strings.Replace(signed, "MIRPUR", "UTTARA", 1),
+		strings.Replace(signed, "|200|", "|201|", 1),
+		signed[:len(signed)-1] + "A",
+	} {
+		if VerifyMessageSignature(tampered, testAuthenticationKey) {
+			t.Fatalf("tampered message passed authentication: %s", tampered)
+		}
+	}
+	if _, err := SignMessage(message, []byte("short")); err == nil {
+		t.Fatal("expected weak authentication key to be rejected")
 	}
 }
 

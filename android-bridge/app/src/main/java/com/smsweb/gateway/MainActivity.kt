@@ -35,10 +35,24 @@ class MainActivity : Activity() {
 
     private val responseReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action == GatewayEvents.ACTION_SECURITY_REJECTION) {
+                val error = intent.getStringExtra(GatewayEvents.EXTRA_ERROR)
+                    ?: "An unauthenticated response was blocked."
+                webView.post {
+                    webView.evaluateJavascript(
+                        "window.SMSWeb?.gateway?.receiveSecurityError(${JSONObject.quote(error)})",
+                        null
+                    )
+                }
+                return
+            }
             val rawText = intent.getStringExtra(GatewayEvents.EXTRA_TEXT) ?: return
+            val authentication = intent.getStringExtra(GatewayEvents.EXTRA_AUTHENTICATION)
+                ?: AuthenticationStatus.UNSIGNED.name
             webView.post {
                 webView.evaluateJavascript(
-                    "window.SMSWeb?.gateway?.receiveSms(${JSONObject.quote(rawText)})",
+                    "window.SMSWeb?.gateway?.receiveSms(" +
+                        "${JSONObject.quote(rawText)},${JSONObject.quote(authentication)})",
                     null
                 )
             }
@@ -246,7 +260,10 @@ class MainActivity : Activity() {
 
     override fun onStart() {
         super.onStart()
-        val filter = IntentFilter(GatewayEvents.ACTION_PI_RESPONSE)
+        val filter = IntentFilter().apply {
+            addAction(GatewayEvents.ACTION_PI_RESPONSE)
+            addAction(GatewayEvents.ACTION_SECURITY_REJECTION)
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(responseReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {

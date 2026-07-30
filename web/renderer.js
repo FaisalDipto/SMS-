@@ -75,6 +75,7 @@
 
   function renderTrust(record, now = Date.now()) {
     const trust = String(record.trust || 'UNVERIFIED').toUpperCase();
+    const authenticated = String(record.authentication || '').toUpperCase() === 'AUTHENTICATED';
     const trustLabels = {
       VERIFIED: 'Verified source',
       DEMO: 'Demo data',
@@ -85,8 +86,13 @@
     const verifiedAt = toMilliseconds(record.verifiedAt);
     const expiresAt = toMilliseconds(record.expiresAt);
     const isExpired = expiresAt !== null && expiresAt <= now;
-    const warning = normalizedTrust === 'VERIFIED'
-      ? 'Source identity is recorded. Check the timestamp before acting.'
+    const displayLabel = authenticated
+      ? normalizedTrust === 'VERIFIED' ? 'Authenticated source' : 'Authenticated demo'
+      : 'Unverified message';
+    const warning = !authenticated
+      ? 'This message did not pass native gateway authentication and cannot be used for routing.'
+      : normalizedTrust === 'VERIFIED'
+      ? 'The message signature and source metadata passed gateway verification.'
       : normalizedTrust === 'DEMO'
         ? 'Demonstration records are not authority-verified emergency information.'
         : 'The origin of this information has not been verified.';
@@ -98,7 +104,7 @@
 
     return `<section class="trust-panel trust-${normalizedTrust.toLowerCase()}" aria-label="Information trust and source">
       <div class="trust-heading">
-        <span class="trust-badge">${escapeHtml(trustLabels[normalizedTrust])}</span>
+        <span class="trust-badge">${escapeHtml(displayLabel)}</span>
         <strong>${escapeHtml(source)}</strong>
       </div>
       <p>${verifiedAt === null
@@ -252,9 +258,12 @@
             const priority = ALERT_PRIORITIES.has(alert.priority) ? alert.priority : 'UNKNOWN';
             const priorityClass = priority === 'UNKNOWN' ? 'priority-unknown' : `priority-${priority.toLowerCase()}`;
             const expiresAt = alert.expiresAt ?? alert.expires;
+            const authenticated =
+              String(alert.authentication || '').toUpperCase() === 'AUTHENTICATED';
             return `<li class="resource-item alert-item ${priorityClass}">
               <div>
                 <p class="alert-priority">${escapeHtml(priority)}</p>
+                <p class="trust-badge">${authenticated ? 'Authenticated alert' : 'Unverified alert'}</p>
                 <h3>${escapeHtml(alert.message)}</h3>
                 <p>${escapeHtml(alert.region && alert.region !== '-' ? alert.region : 'All regions')}</p>
               </div>
@@ -318,7 +327,8 @@
       shelter.latitude === undefined && !SHELTER_COORDINATES[shelter.location]
     );
     const expiresAt = toMilliseconds(page.expiresAt);
-    const canRoute = expiresAt !== null && expiresAt > now;
+    const authenticated = String(page.authentication || '').toUpperCase() === 'AUTHENTICATED';
+    const canRoute = authenticated && expiresAt !== null && expiresAt > now;
     const body = `<div class="map-placeholder map-data-view" aria-label="Offline greater Dhaka shelter map">
       <div id="offline-vector-map" class="offline-vector-map" role="application" aria-label="Interactive offline greater Dhaka map"></div>
       <div id="map-legacy-layer" class="map-legacy-layer">
@@ -366,7 +376,9 @@
         <button id="map-route" type="button"${canRoute ? '' : ' disabled'}>Find route to nearest open shelter</button>
         <p id="map-route-status" class="map-note">${canRoute
           ? 'Mirpur road coverage is bundled for route preview.'
-          : 'Routing is disabled until current shelter information with an expiry time is received.'}</p>
+          : authenticated
+            ? 'Routing is disabled until current shelter information with an expiry time is received.'
+            : 'Routing is disabled because this shelter message was not authenticated by the gateway.'}</p>
         <p id="map-route-location" class="map-note"></p>
         <ul id="map-route-roads" class="map-route-roads" aria-live="polite"></ul>
         <p class="map-attribution">Road data: &copy; OpenStreetMap contributors</p>

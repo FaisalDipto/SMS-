@@ -34,12 +34,21 @@ class GatewayWebBridge(
     }
 
     @JavascriptInterface
+    fun getAuthenticationStatus(): String =
+        if (GatewayConfig.hasAuthenticationKey(appContext)) "configured" else "missing"
+
+    @JavascriptInterface
+    fun saveAuthenticationKey(value: String): String =
+        if (GatewayConfig.saveAuthenticationKey(appContext, value)) "configured" else "invalid"
+
+    @JavascriptInterface
     fun getPendingResponses(): String {
         val responses = JSONArray()
         GatewayDatabase(appContext).unreadWebResponses().forEach { response ->
             responses.put(JSONObject().apply {
                 put("id", response.id)
                 put("text", response.text)
+                put("authentication", response.authentication)
             })
         }
         return responses.toString()

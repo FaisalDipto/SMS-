@@ -7,6 +7,7 @@ object GatewayConfig {
     private const val PI_URL = "pi_url"
     private const val SERVICE_NUMBER = "service_number"
     private const val TRUSTED_SENDERS = "trusted_senders"
+    private const val AUTHENTICATION_KEY = "authentication_key"
     const val DEFAULT_PI_URL = "http://192.168.43.1:8080"
 
     fun piUrl(context: Context): String = context
@@ -33,6 +34,27 @@ object GatewayConfig {
             .edit()
             .putString(SERVICE_NUMBER, value.trim())
             .apply()
+    }
+
+    fun hasAuthenticationKey(context: Context): Boolean =
+        authenticationKey(context).toByteArray(Charsets.UTF_8).size >=
+            MessageAuthenticator.MINIMUM_KEY_BYTES
+
+    internal fun authenticationKey(context: Context): String = context
+        .getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+        .getString(AUTHENTICATION_KEY, "")
+        .orEmpty()
+
+    fun saveAuthenticationKey(context: Context, value: String): Boolean {
+        val normalized = value.trim()
+        if (normalized.toByteArray(Charsets.UTF_8).size < MessageAuthenticator.MINIMUM_KEY_BYTES) {
+            return false
+        }
+        context.getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(AUTHENTICATION_KEY, normalized)
+            .apply()
+        return true
     }
 
     fun isSenderAllowed(context: Context, sender: String): Boolean {

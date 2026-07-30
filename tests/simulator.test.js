@@ -50,7 +50,9 @@ test('parses, stores, and renders a shelter response', async () => {
   const result = await instance.handleSms(
     'RES|1|A17K|SHELTER|1/1|DHK|MIRPUR:120:OPEN',
     appView,
-    now
+    now,
+    'android-gateway',
+    'AUTHENTICATED'
   );
 
   assert.equal(result, 'Rendered SHELTER response for DHK');
@@ -61,6 +63,7 @@ test('parses, stores, and renders a shelter response', async () => {
   assert.equal(calls[1][1].source, 'SMSWEB_DEMO');
   assert.equal(calls[1][1].verifiedAt, 1_700_000_000_000);
   assert.equal(calls[1][1].expiresAt, 1_700_003_600_000);
+  assert.equal(calls[1][1].authentication, 'AUTHENTICATED');
   assert.deepEqual(calls[2], ['mount', appView, '<article>MIRPUR:120:OPEN</article>']);
 });
 

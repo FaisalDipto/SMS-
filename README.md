@@ -648,6 +648,26 @@ Minimum security requirements:
 
 The system should never make dangerous decisions automatically. It should present information and its confidence level to the user.
 
+Current prototype security implementation:
+
+- The Go service refuses to start without `SMSWEB_AUTH_KEY` containing at least
+  16 bytes.
+- Every `RES`, `ALT`, and `ERR` message carries a 128-bit tag produced by
+  HMAC-SHA256. The tag is intentionally compact enough to preserve the
+  concatenated-SMS size target.
+- The Android gateway verifies the tag in constant time, rejects expired or
+  future-dated records, and blocks repeated authentication tags before a
+  response can be stored, rendered, or sent by SMS.
+- The shared key is stored in Android app-private preferences and is never
+  returned to the WebView. The dashboard receives only the result
+  `AUTHENTICATED` or a security rejection.
+- Current-but-unauthenticated data remains non-routable. The developer
+  simulator deliberately labels manually pasted content as unverified.
+
+This symmetric key is appropriate for the hackathon prototype, but production
+deployment should replace it with provisioned asymmetric signing keys,
+rotation, revocation, and an audited authority update process.
+
 ## 8. Testing Plan
 
 ### Protocol tests

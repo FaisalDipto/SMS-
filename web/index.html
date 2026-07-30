@@ -39,6 +39,13 @@
           <button id="check-pi-connection" type="button">Check connection</button>
           <p id="gateway-status" role="status" aria-live="polite"></p>
         </div>
+        <label for="authentication-key">Shared response authentication key</label>
+        <input id="authentication-key" type="password" autocomplete="off"
+          placeholder="Same key as SMSWEB_AUTH_KEY" />
+        <div class="gateway-actions">
+          <button id="save-authentication-key" type="button">Save authentication key</button>
+          <p id="authentication-status" role="status" aria-live="polite"></p>
+        </div>
         <label for="service-number">Gateway SMS number</label>
         <input id="service-number" type="tel" inputmode="tel" placeholder="+8801XXXXXXXXX" />
         <div class="gateway-actions">

@@ -18,7 +18,13 @@
   'use strict';
 
   function createSimulator({ protocol, storage, renderer, multipart }) {
-    async function handleSms(rawText, appView, now = Date.now(), source = 'simulator') {
+    async function handleSms(
+      rawText,
+      appView,
+      now = Date.now(),
+      source = 'simulator',
+      authentication = 'UNVERIFIED'
+    ) {
       if (typeof rawText !== 'string' || rawText.trim() === '') {
         throw new Error('Paste an SMS message before parsing');
       }
@@ -70,6 +76,7 @@
           source: response.source || source,
           transportSource: source,
           trust: response.trust || 'UNVERIFIED',
+          authentication,
           verifiedAt: response.verifiedAt ? response.verifiedAt * 1_000 : undefined,
           expiresAt: response.expiresAt ? response.expiresAt * 1_000 : undefined
         };
@@ -87,7 +94,8 @@
           ...alert,
           expiresAt: alert.expires * 1_000,
           receivedAt: now,
-          source
+          source,
+          authentication
         };
 
         await storage.saveMessage({

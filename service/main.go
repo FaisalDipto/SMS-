@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
 
 type Server struct {
-	store *Store
+	store             *Store
+	authenticationKey []byte
 }
 
 type incomingSMS struct {
@@ -31,8 +33,8 @@ type responseStatus struct {
 	Status    string `json:"status"`
 }
 
-func NewServer(store *Store) http.Handler {
-	server := &Server{store: store}
+func NewServer(store *Store, authenticationKey []byte) http.Handler {
+	server := &Server{store: store, authenticationKey: authenticationKey}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", server.health)
 	mux.HandleFunc("POST /sms/incoming", server.incoming)
@@ -79,6 +81,14 @@ func (server *Server) incoming(response http.ResponseWriter, request *http.Reque
 	responseTexts, err := server.createResponses(parsedRequest)
 	if err != nil {
 		responseTexts = []string{SerializeError(parsedRequest.RequestID, "SERVICE_ERROR", err.Error())}
+	}
+	for index, responseText := range responseTexts {
+		signedText, signErr := SignMessage(responseText, server.authenticationKey)
+		if signErr != nil {
+			writeError(response, http.StatusInternalServerError, signErr)
+			return
+		}
+		responseTexts[index] = signedText
 	}
 
 	for _, responseText := range responseTexts {
@@ -243,7 +253,11 @@ func main() {
 		log.Fatal(err)
 	}
 	defer store.Close()
+	authenticationKey := []byte(os.Getenv("SMSWEB_AUTH_KEY"))
+	if len(authenticationKey) < minimumAuthenticationKeyBytes {
+		log.Fatalf("SMSWEB_AUTH_KEY must be set to at least %d bytes", minimumAuthenticationKeyBytes)
+	}
 
 	log.Printf("SMSWeb crisis service listening on %s", *address)
-	log.Fatal(http.ListenAndServe(*address, NewServer(store)))
+	log.Fatal(http.ListenAndServe(*address, NewServer(store, authenticationKey)))
 }

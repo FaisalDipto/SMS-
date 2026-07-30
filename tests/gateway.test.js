@@ -38,6 +38,9 @@ test('loads and saves the native Pi URL', () => {
   const requestSheltersButton = element();
   const requestAlertsButton = element();
   const requestStatus = element();
+  const authenticationKeyInput = element();
+  const saveAuthenticationKeyButton = element();
+  const authenticationStatus = element();
 
   instance.initialize({
     urlInput,
@@ -49,7 +52,10 @@ test('loads and saves the native Pi URL', () => {
     saveServiceNumberButton,
     requestSheltersButton,
     requestAlertsButton,
-    requestStatusElement: requestStatus
+    requestStatusElement: requestStatus,
+    authenticationKeyInput,
+    saveAuthenticationKeyButton,
+    authenticationStatusElement: authenticationStatus
   });
 
   assert.equal(urlInput.value, 'http://192.168.0.103:8080');
@@ -74,7 +80,10 @@ test('updates the badge when the native health result arrives', () => {
     saveServiceNumberButton: element(),
     requestSheltersButton: element(),
     requestAlertsButton: element(),
-    requestStatusElement: element()
+    requestStatusElement: element(),
+    authenticationKeyInput: element(),
+    saveAuthenticationKeyButton: element(),
+    authenticationStatusElement: element()
   });
   instance.receiveConnectionStatus(true);
 
@@ -82,17 +91,18 @@ test('updates the badge when the native health result arrives', () => {
   assert.match(status.textContent, /reachable/);
 });
 
-test('forwards native SMS responses to the registered handler', () => {
+test('forwards native SMS responses and authentication status to the handler', () => {
   const instance = gateway.createGateway(null);
   let received;
 
-  instance.setIncomingHandler((rawText) => {
-    received = rawText;
+  instance.setIncomingHandler((rawText, authentication) => {
+    received = [rawText, authentication];
     return 'handled';
   });
 
-  assert.equal(instance.receiveSms('RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL'), 'handled');
-  assert.equal(received, 'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL');
+  const rawText = 'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL';
+  assert.equal(instance.receiveSms(rawText, 'AUTHENTICATED'), 'handled');
+  assert.deepEqual(received, [rawText, 'AUTHENTICATED']);
 });
 
 test('serializes and sends a shelter request through the native bridge', () => {
@@ -138,15 +148,58 @@ test('replays pending native responses and acknowledges them', async () => {
   const instance = gateway.createGateway({
     getPendingResponses: () => JSON.stringify([{
       id: 7,
-      text: 'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL'
+      text: 'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL',
+      authentication: 'AUTHENTICATED'
     }]),
     acknowledgeResponse: (text) => acknowledged.push(text)
   });
   const received = [];
 
-  instance.setIncomingHandler(async (rawText) => received.push(rawText));
+  instance.setIncomingHandler(async (rawText, authentication) =>
+    received.push([rawText, authentication]));
   await instance.replayPendingResponses();
 
-  assert.deepEqual(received, ['RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL']);
-  assert.deepEqual(acknowledged, received);
+  assert.deepEqual(received, [[
+    'RES|1|A17K|SHELTER|1/1|DHK|DU:0:FULL',
+    'AUTHENTICATED'
+  ]]);
+  assert.deepEqual(acknowledged, [received[0][0]]);
+});
+
+test('stores the authentication key through the native-only bridge', () => {
+  const saved = [];
+  const instance = gateway.createGateway({
+    getPiUrl: () => 'http://pi:8080',
+    getAuthenticationStatus: () => 'missing',
+    saveAuthenticationKey: (value) => {
+      saved.push(value);
+      return value.length >= 16 ? 'configured' : 'invalid';
+    }
+  });
+  const authenticationKeyInput = element();
+  const saveAuthenticationKeyButton = element();
+  const authenticationStatus = element();
+
+  instance.initialize({
+    urlInput: element(),
+    saveButton: element(),
+    checkButton: element(),
+    statusElement: element(),
+    badgeElement: element(),
+    serviceNumber: element(),
+    saveServiceNumberButton: element(),
+    requestSheltersButton: element(),
+    requestAlertsButton: element(),
+    requestStatusElement: element(),
+    authenticationKeyInput,
+    saveAuthenticationKeyButton,
+    authenticationStatusElement: authenticationStatus
+  });
+
+  assert.match(authenticationStatus.textContent, /missing/i);
+  authenticationKeyInput.value = 'smsweb-demo-key-2026';
+  saveAuthenticationKeyButton.listeners.click();
+  assert.deepEqual(saved, ['smsweb-demo-key-2026']);
+  assert.equal(authenticationKeyInput.value, '');
+  assert.match(authenticationStatus.textContent, /saved/i);
 });

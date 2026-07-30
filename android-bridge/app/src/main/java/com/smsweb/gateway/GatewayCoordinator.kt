@@ -24,11 +24,38 @@ class GatewayCoordinator(private val context: Context) {
                 val response = pi.incoming(item.sender, item.text)
                 database.markForwarded(item.id)
                 response.messages.forEach { responseText ->
-                    if (database.enqueueToUser(response.recipient, responseText, item.subscriptionId)) {
+                    val authentication = MessageAuthenticator.verify(
+                        responseText,
+                        GatewayConfig.authenticationKey(context)
+                    )
+                    if (authentication.status != AuthenticationStatus.AUTHENTICATED) {
+                        broadcastSecurityRejection(authentication.reason)
+                        return@forEach
+                    }
+                    val signature = authentication.signature ?: return@forEach
+                    if (!database.rememberAuthenticatedMessage(
+                            signature,
+                            authentication.replayExpiresAt
+                        )
+                    ) {
+                        broadcastSecurityRejection("A replayed authenticated response was blocked.")
+                        return@forEach
+                    }
+                    if (database.enqueueToUser(
+                            response.recipient,
+                            responseText,
+                            item.subscriptionId,
+                            AuthenticationStatus.AUTHENTICATED.name
+                        )
+                    ) {
                         context.sendBroadcast(Intent(GatewayEvents.ACTION_PI_RESPONSE).apply {
                             setPackage(context.packageName)
                             putExtra(GatewayEvents.EXTRA_REQUEST_ID, SmsProtocol.messageId(responseText))
                             putExtra(GatewayEvents.EXTRA_TEXT, responseText)
+                            putExtra(
+                                GatewayEvents.EXTRA_AUTHENTICATION,
+                                AuthenticationStatus.AUTHENTICATED.name
+                            )
                         })
                     }
                 }
@@ -39,6 +66,11 @@ class GatewayCoordinator(private val context: Context) {
         }
 
         database.pending("TO_USER").forEach { item ->
+            if (item.authentication != AuthenticationStatus.AUTHENTICATED.name) {
+                database.markRejected(item.id)
+                broadcastSecurityRejection("A legacy unauthenticated queued response was blocked.")
+                return@forEach
+            }
             try {
                 SmsTransport.send(
                     smsManager(item.subscriptionId),
@@ -56,6 +88,13 @@ class GatewayCoordinator(private val context: Context) {
         }
 
         if (retryNeeded) RetryScheduler.schedule(context)
+    }
+
+    private fun broadcastSecurityRejection(message: String) {
+        context.sendBroadcast(Intent(GatewayEvents.ACTION_SECURITY_REJECTION).apply {
+            setPackage(context.packageName)
+            putExtra(GatewayEvents.EXTRA_ERROR, message)
+        })
     }
 
     @Suppress("DEPRECATION")

@@ -33,6 +33,7 @@
   ]);
   const ALERT_PRIORITIES = new Set(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
   const RESPONSE_TRUST_LEVELS = new Set(['VERIFIED', 'DEMO', 'UNVERIFIED']);
+  const SIGNATURE_PATTERN = /^[A-Za-z0-9_-]{22}$/;
 
   function protocolError(message) {
     return new Error(`Invalid SMS protocol message: ${message}`);
@@ -80,6 +81,12 @@
     }
     if (!Number.isInteger(expiresAt) || expiresAt <= verifiedAt) {
       throw protocolError('expiresAt must be later than verifiedAt');
+    }
+  }
+
+  function validateSignature(signature) {
+    if (!SIGNATURE_PATTERN.test(signature)) {
+      throw protocolError('signature must be a 128-bit URL-safe HMAC tag');
     }
   }
 
@@ -162,13 +169,15 @@
   function parseResponse(text) {
     const fields = splitFields(requireText(text, 'message'));
 
-    if (![7, 11].includes(fields.length) || fields[0] !== 'RES') {
+    if (![7, 8, 11, 12].includes(fields.length) || fields[0] !== 'RES') {
       throw protocolError('response must use the legacy or metadata response format');
     }
 
     const [, version, requestId, page, part, region] = fields;
-    const hasMetadata = fields.length === 11;
-    const payload = fields[fields.length - 1];
+    const hasMetadata = fields.length >= 11;
+    const hasSignature = fields.length === 8 || fields.length === 12;
+    const payload = fields[fields.length - (hasSignature ? 2 : 1)];
+    const signature = hasSignature ? fields[fields.length - 1] : undefined;
     validateVersion(version);
     validateIdentifier(requestId, 'request ID');
 
@@ -179,6 +188,7 @@
     parsePart(part);
     validateRegion(region);
     requireText(payload, 'payload', { allowEmpty: true });
+    if (signature) validateSignature(signature);
 
     const response = {
       type: 'RES',
@@ -197,17 +207,18 @@
       validateResponseMetadata({ trust, source, verifiedAt, expiresAt });
       Object.assign(response, { trust, source, verifiedAt, expiresAt });
     }
+    if (signature) response.signature = signature;
     return response;
   }
 
   function parseAlert(text) {
     const fields = splitFields(requireText(text, 'message'));
 
-    if (fields.length !== 7 || fields[0] !== 'ALT') {
+    if (![7, 8].includes(fields.length) || fields[0] !== 'ALT') {
       throw protocolError('alert must contain ALT and six fields');
     }
 
-    const [, version, alertId, priority, expires, region, message] = fields;
+    const [, version, alertId, priority, expires, region, message, signature] = fields;
     validateVersion(version);
     validateIdentifier(alertId, 'alert ID');
 
@@ -221,8 +232,9 @@
 
     validateRegion(region);
     requireText(message, 'message');
+    if (signature) validateSignature(signature);
 
-    return {
+    const alert = {
       type: 'ALT',
       version,
       alertId,
@@ -231,6 +243,8 @@
       region,
       message
     };
+    if (signature) alert.signature = signature;
+    return alert;
   }
 
   function serializeRequest(request) {
@@ -295,6 +309,10 @@
       );
     }
     fields.push(response.payload);
+    if (response.signature !== undefined) {
+      validateSignature(response.signature);
+      fields.push(response.signature);
+    }
     return fields.map((field, index) => index === 0 ? field : escapeField(field, 'response field')).join('|');
   }
 
@@ -315,7 +333,7 @@
     validateRegion(alert.region);
     requireText(alert.message, 'message');
 
-    return [
+    const fields = [
       'ALT',
       version,
       alert.alertId,
@@ -323,7 +341,12 @@
       String(alert.expires),
       alert.region,
       alert.message
-    ].map((field, index) => index === 0 ? field : escapeField(field, 'alert field')).join('|');
+    ];
+    if (alert.signature !== undefined) {
+      validateSignature(alert.signature);
+      fields.push(alert.signature);
+    }
+    return fields.map((field, index) => index === 0 ? field : escapeField(field, 'alert field')).join('|');
   }
 
   return {

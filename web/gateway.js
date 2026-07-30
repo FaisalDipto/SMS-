@@ -19,6 +19,7 @@
     let serviceNumberInput;
     let requestStatus;
     let requestHandler;
+    let authenticationStatus;
 
     function setConnectionState(connected) {
       if (!badge || !status) return;
@@ -41,17 +42,22 @@
       requestSheltersButton,
       requestAlertsButton,
       requestStatusElement,
+      authenticationKeyInput,
+      saveAuthenticationKeyButton,
+      authenticationStatusElement,
       onRequest
     }) {
       badge = badgeElement;
       status = statusElement;
       serviceNumberInput = serviceNumber;
       requestStatus = requestStatusElement;
+      authenticationStatus = authenticationStatusElement;
       requestHandler = typeof onRequest === 'function' ? onRequest : null;
 
       if (!urlInput || !saveButton || !checkButton || !status || !badge ||
         !serviceNumberInput || !saveServiceNumberButton || !requestSheltersButton ||
-        !requestAlertsButton || !requestStatus) {
+        !requestAlertsButton || !requestStatus || !authenticationKeyInput ||
+        !saveAuthenticationKeyButton || !authenticationStatus) {
         return;
       }
 
@@ -62,6 +68,8 @@
         saveServiceNumberButton.disabled = true;
         requestSheltersButton.disabled = true;
         requestAlertsButton.disabled = true;
+        authenticationKeyInput.disabled = true;
+        saveAuthenticationKeyButton.disabled = true;
         return;
       }
 
@@ -70,6 +78,18 @@
         ? bridge.getServiceNumber() || ''
         : '';
       status.textContent = 'Pi URL loaded. Check the connection when the service is running.';
+      const authenticationConfigured = bridge.getAuthenticationStatus?.() === 'configured';
+      authenticationStatus.textContent = authenticationConfigured
+        ? 'Authentication key configured on this phone.'
+        : 'Authentication key missing. Crisis responses will be blocked.';
+
+      saveAuthenticationKeyButton.addEventListener('click', () => {
+        const result = bridge.saveAuthenticationKey?.(authenticationKeyInput.value);
+        authenticationKeyInput.value = '';
+        authenticationStatus.textContent = result === 'configured'
+          ? 'Authentication key saved. Responses must now pass verification.'
+          : 'Use the same key as the Pi service (at least 16 characters).';
+      });
 
       saveButton.addEventListener('click', () => {
         const savedUrl = bridge.savePiUrl(urlInput.value);
@@ -164,8 +184,14 @@
       incomingHandler = typeof handler === 'function' ? handler : null;
     }
 
-    function receiveSms(rawText) {
-      return incomingHandler ? incomingHandler(rawText) : undefined;
+    function receiveSms(rawText, authentication = 'UNVERIFIED') {
+      return incomingHandler ? incomingHandler(rawText, authentication) : undefined;
+    }
+
+    function receiveSecurityError(error) {
+      const message = `Security check blocked a response: ${error}`;
+      if (authenticationStatus) authenticationStatus.textContent = message;
+      if (requestStatus) requestStatus.textContent = message;
     }
 
     async function replayPendingResponses() {
@@ -182,7 +208,7 @@
 
       for (const response of Array.isArray(responses) ? responses : []) {
         try {
-          await incomingHandler(response.text);
+          await incomingHandler(response.text, response.authentication || 'UNVERIFIED');
           bridge.acknowledgeResponse?.(response.text);
         } catch (_error) {
           // Keep the response pending so the next app launch can retry it.
@@ -195,6 +221,7 @@
       receiveConnectionStatus,
       setIncomingHandler,
       receiveSms,
+      receiveSecurityError,
       replayPendingResponses,
       sendShelterRequest,
       sendAlertRequest

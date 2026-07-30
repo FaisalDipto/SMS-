@@ -97,6 +97,22 @@ test('parses and serializes response trust and freshness metadata', () => {
   assert.equal(protocol.serializeResponse(response), rawText);
 });
 
+test('parses and serializes authenticated response and alert tags', () => {
+  const signature = 'abcdefghijklmnopqrstuv';
+  const responseText =
+    `RES|1|A17K|SHELTER|1/1|DHK|DEMO|SMSWEB_DEMO|1785362400|1785384000|MIRPUR:120:OPEN|${signature}`;
+  const response = protocol.parseResponse(responseText);
+
+  assert.equal(response.signature, signature);
+  assert.equal(response.payload, 'MIRPUR:120:OPEN');
+  assert.equal(protocol.serializeResponse(response), responseText);
+
+  const alertText = `ALT|1|F22P|HIGH|1785384000|DHK|Avoid Mirpur bridge|${signature}`;
+  const alert = protocol.parseAlert(alertText);
+  assert.equal(alert.signature, signature);
+  assert.equal(protocol.serializeAlert(alert), alertText);
+});
+
 test('parses alerts and converts expiry to a number', () => {
   assert.deepEqual(protocol.parseAlert(
     'ALT|1|F22P|HIGH|1764000000|DHK|Avoid road near Mirpur bridge'
@@ -125,4 +141,8 @@ test('rejects unsupported commands, pages, versions, and invalid parts', () => {
     /later than verifiedAt/
   );
   assert.throws(() => protocol.parseAlert('ALT|1|F22P|HIGH|0|DHK|Expired'), /positive Unix timestamp/);
+  assert.throws(
+    () => protocol.parseAlert('ALT|1|F22P|HIGH|1785384000|DHK|Alert|bad-tag'),
+    /128-bit URL-safe/
+  );
 });

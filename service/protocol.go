@@ -1,6 +1,9 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -8,6 +11,8 @@ import (
 )
 
 const protocolVersion = "1"
+const minimumAuthenticationKeyBytes = 16
+const authenticationTagBytes = 16
 
 var identifierPattern = regexp.MustCompile(`^[A-Z0-9]{2,16}$`)
 var regionPattern = regexp.MustCompile(`^[A-Z0-9_-]{1,12}$`)
@@ -307,4 +312,37 @@ func compactShelter(location string, latitude, longitude float64, spaces int, st
 		strconv.Itoa(spaces),
 		status,
 	}, ":")
+}
+
+func SignMessage(message string, authenticationKey []byte) (string, error) {
+	if len(authenticationKey) < minimumAuthenticationKeyBytes {
+		return "", fmt.Errorf("authentication key must contain at least %d bytes", minimumAuthenticationKeyBytes)
+	}
+	if strings.TrimSpace(message) == "" {
+		return "", fmt.Errorf("message to sign cannot be empty")
+	}
+
+	mac := hmac.New(sha256.New, authenticationKey)
+	_, _ = mac.Write([]byte(message))
+	signature := base64.RawURLEncoding.EncodeToString(mac.Sum(nil)[:authenticationTagBytes])
+	return message + "|" + signature, nil
+}
+
+func VerifyMessageSignature(message string, authenticationKey []byte) bool {
+	if len(authenticationKey) < minimumAuthenticationKeyBytes {
+		return false
+	}
+	separator := strings.LastIndex(message, "|")
+	if separator <= 0 || separator == len(message)-1 {
+		return false
+	}
+
+	provided, err := base64.RawURLEncoding.DecodeString(message[separator+1:])
+	if err != nil {
+		return false
+	}
+	mac := hmac.New(sha256.New, authenticationKey)
+	_, _ = mac.Write([]byte(message[:separator]))
+	expected := mac.Sum(nil)[:authenticationTagBytes]
+	return len(provided) == authenticationTagBytes && hmac.Equal(provided, expected)
 }

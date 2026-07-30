@@ -59,10 +59,11 @@ test('shows source, verification time, and demo trust without claiming authority
     verifiedAt: now - 60_000,
     expiresAt: now + 60_000,
     trust: 'DEMO',
-    source: 'SMSWEB_DEMO'
+    source: 'SMSWEB_DEMO',
+    authentication: 'AUTHENTICATED'
   }, now);
 
-  assert.match(html, /Demo data/);
+  assert.match(html, /Authenticated demo/);
   assert.match(html, /SMSWEB_DEMO/);
   assert.match(html, /Demonstration records are not authority-verified/);
   assert.doesNotMatch(html, /trust-verified/);
@@ -73,11 +74,27 @@ test('disables routing for shelter information without a current expiry', () => 
     region: 'DHK',
     payload: 'MIRPUR:23.8069:90.3687:120:OPEN',
     receivedAt: 1_700_000_000_000,
-    trust: 'UNVERIFIED'
+    trust: 'DEMO',
+    authentication: 'AUTHENTICATED'
   }, 1_700_000_000_000);
 
   assert.match(html, /id="map-route" type="button" disabled/);
   assert.match(html, /Routing is disabled until current shelter information/);
+});
+
+test('disables routing for current but unauthenticated shelter information', () => {
+  const now = 1_700_000_000_000;
+  const html = renderer.renderMapPage({
+    region: 'DHK',
+    payload: 'MIRPUR:23.8069:90.3687:120:OPEN',
+    receivedAt: now,
+    expiresAt: now + 60_000,
+    authentication: 'UNVERIFIED'
+  }, now);
+
+  assert.match(html, /id="map-route" type="button" disabled/);
+  assert.match(html, /not authenticated by the gateway/);
+  assert.match(html, /Unverified message/);
 });
 
 test('renders alert priority and escaped messages', () => {
@@ -87,12 +104,14 @@ test('renders alert priority and escaped messages', () => {
     region: 'DHK',
     message: 'Avoid <the bridge>',
     receivedAt: 1_700_000_000_000,
-    expires: 1_800_000_000
+    expires: 1_800_000_000,
+    authentication: 'AUTHENTICATED'
   }], 1_700_000_000_000);
 
   assert.match(html, /HIGH/);
   assert.match(html, /Avoid &lt;the bridge&gt;/);
   assert.match(html, /Expires/);
+  assert.match(html, /Authenticated alert/);
 });
 
 test('rejects malformed shelter payloads', () => {
