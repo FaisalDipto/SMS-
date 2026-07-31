@@ -8,8 +8,13 @@ import android.os.SystemClock
 
 object MissedCallScheduler {
     // Silence window after the last missed call before a sequence is
-    // finalized into a request. Tune this after testing on a real device.
-    const val DEBOUNCE_WINDOW_MS = 9_000L
+    // finalized into a request. Measured at the gateway between one call's
+    // ring ending and the next call's ring starting, so it must absorb real
+    // GSM/LTE call-teardown-and-setup signaling delay on top of how fast the
+    // caller redials -- 9s proved too tight in real testing and caused a
+    // second call to be scored as its own new (SHELTER) sequence instead of
+    // continuing the previous one. Tune further after more device testing.
+    const val DEBOUNCE_WINDOW_MS = 25_000L
 
     private const val EXTRA_SENDER = "sender"
 

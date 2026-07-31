@@ -6,12 +6,12 @@ import android.content.Intent
 
 class MissedCallFinalizeReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent?) {
-        val sender = MissedCallScheduler.senderFrom(intent) ?: return
+        val key = MissedCallScheduler.senderFrom(intent) ?: return
         val appContext = context.applicationContext
         val pendingResult = goAsync()
         Thread {
             try {
-                MissedCallCoordinator(appContext).finalizeSequence(sender)
+                MissedCallCoordinator(appContext).finalizeSequence(key)
             } finally {
                 pendingResult.finish()
             }
