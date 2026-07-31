@@ -11,6 +11,7 @@ class GatewayWebBridge(
     private val webView: WebView
 ) {
     private val appContext = activity.applicationContext
+    private val callSequencer = CallSequencer(appContext)
 
     @JavascriptInterface
     fun getGatewayStatus(): String = "ready"
@@ -147,6 +148,45 @@ class GatewayWebBridge(
         } catch (_: IllegalArgumentException) {
             "invalid"
         }
+    }
+
+    @JavascriptInterface
+    fun getCallCommandMapping(): String {
+        val mapping = JSONObject()
+        MissedCallCoordinator.COMMAND_BY_COUNT.forEach { (count, command) -> mapping.put(command, count) }
+        return mapping.toString()
+    }
+
+    @JavascriptInterface
+    fun hasCallPermission(): Boolean = callSequencer.hasCallPermission()
+
+    @JavascriptInterface
+    fun startCallSequence(recipient: String, totalCalls: Int): String {
+        val trimmed = recipient.trim()
+        if (trimmed.isEmpty() || totalCalls <= 0) return "invalid"
+        if (!callSequencer.hasCallPermission()) return "permission-denied"
+
+        val started = callSequencer.start(
+            trimmed,
+            totalCalls,
+            onProgress = { placed, total ->
+                webView.post {
+                    webView.evaluateJavascript(
+                        "window.SMSWeb?.gateway?.receiveCallProgress($placed,$total)",
+                        null
+                    )
+                }
+            },
+            onComplete = {
+                webView.post {
+                    webView.evaluateJavascript(
+                        "window.SMSWeb?.gateway?.receiveCallSequenceDone()",
+                        null
+                    )
+                }
+            }
+        )
+        return if (started) "started" else "invalid"
     }
 
     @JavascriptInterface

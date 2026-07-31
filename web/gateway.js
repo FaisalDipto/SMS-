@@ -21,6 +21,8 @@
     let requestHandler;
     let authenticationStatus;
     let authenticationBadge;
+    let callStatus;
+    let callCommandMapping = null;
 
     function setConnectionState(connected) {
       if (!badge || !status) return;
@@ -58,6 +60,10 @@
       roleRoot,
       gatewayEyebrow,
       gatewayTitle,
+      callShelterButton,
+      callAlertButton,
+      callHazardButton,
+      callStatusElement,
       onRequest
     }) {
       badge = badgeElement;
@@ -66,6 +72,7 @@
       requestStatus = requestStatusElement;
       authenticationStatus = authenticationStatusElement;
       authenticationBadge = authenticationBadgeElement;
+      callStatus = callStatusElement;
       requestHandler = typeof onRequest === 'function' ? onRequest : null;
 
       if (!urlInput || !saveButton || !checkButton || !status || !badge ||
@@ -235,6 +242,18 @@
           requestStatus.textContent = error.message;
         }
       });
+
+      callShelterButton?.addEventListener('click', () => {
+        startCallSequence(serviceNumberInput.value, 'SHELTER');
+      });
+
+      callAlertButton?.addEventListener('click', () => {
+        startCallSequence(serviceNumberInput.value, 'ALERT');
+      });
+
+      callHazardButton?.addEventListener('click', () => {
+        startCallSequence(serviceNumberInput.value, 'HAZARD');
+      });
     }
 
     function getAppRole() {
@@ -325,6 +344,60 @@
       return sendRequest(recipient, 'HAZARD', region);
     }
 
+    function getCallCommandMapping() {
+      if (callCommandMapping) return callCommandMapping;
+      if (!bridge || typeof bridge.getCallCommandMapping !== 'function') return null;
+      try {
+        callCommandMapping = JSON.parse(bridge.getCallCommandMapping() || '{}');
+      } catch (_error) {
+        callCommandMapping = null;
+      }
+      return callCommandMapping;
+    }
+
+    function startCallSequence(recipient, command) {
+      if (!callStatus) return;
+      if (!recipient || !recipient.trim()) {
+        callStatus.textContent = 'Enter the gateway number before calling.';
+        return;
+      }
+      if (!bridge || typeof bridge.startCallSequence !== 'function') {
+        callStatus.textContent = 'Calling is available in the Android app.';
+        return;
+      }
+
+      const mapping = getCallCommandMapping();
+      const totalCalls = mapping ? mapping[command] : undefined;
+      if (!totalCalls) {
+        callStatus.textContent = 'This device does not have a call mapping for that request.';
+        return;
+      }
+
+      const status = bridge.startCallSequence(recipient.trim(), totalCalls);
+      if (status === 'permission-denied') {
+        callStatus.textContent = 'Call permission is not granted.';
+        return;
+      }
+      if (status !== 'started') {
+        callStatus.textContent = 'The call could not be started. Check the gateway number.';
+        return;
+      }
+
+      callStatus.textContent = `Calling ${recipient.trim()}: call 1 of ${totalCalls}. Let it ring, then hang up.`;
+    }
+
+    function receiveCallProgress(placed, total) {
+      if (!callStatus) return;
+      callStatus.textContent = placed >= total
+        ? `Call ${placed} of ${total} placed. Let it ring, then hang up.`
+        : `Call ${placed} of ${total} placed. Let it ring, then hang up — the next call dials automatically.`;
+    }
+
+    function receiveCallSequenceDone() {
+      if (!callStatus) return;
+      callStatus.textContent = 'Call sequence complete. Waiting for the SMS reply; the page will update automatically.';
+    }
+
     function receiveConnectionStatus(connected) {
       setConnectionState(Boolean(connected));
     }
@@ -406,7 +479,10 @@
       applyAppRole,
       sendShelterRequest,
       sendAlertRequest,
-      sendHazardRequest
+      sendHazardRequest,
+      startCallSequence,
+      receiveCallProgress,
+      receiveCallSequenceDone
     };
   }
 

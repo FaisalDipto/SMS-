@@ -1438,6 +1438,20 @@ body[data-app-role="USER"] #request-status {
   font-size: 0.7rem;
 }
 
+body[data-app-role="USER"] .call-actions-label {
+  grid-column: 1 / -1;
+  margin: 0.5rem 0 0;
+  color: #cce6e1;
+  font-size: 0.7rem;
+}
+
+body[data-app-role="USER"] #call-status {
+  grid-column: 1 / -1;
+  margin: 0.25rem 0 0;
+  color: #d8eeea;
+  font-size: 0.7rem;
+}
+
 body[data-app-role="USER"] .app-nav {
   position: fixed;
   z-index: 100;
